@@ -20,3 +20,5 @@ Prompt: Can you improve keyboard handling so when I move my square with keyboard
 
 Prompt: It is not fully working. If i hold Left and press space, the movement stops until I press space again. Seems like redraw is called only when a key event comes.
 
+Prompt: The main function is very large and handling different operations. Refactor the code. Split on functions and structures if needed.
+
