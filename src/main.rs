@@ -1,4 +1,6 @@
 use pixels::{Error, Pixels, SurfaceTexture};
+use std::collections::HashSet;
+use std::time::{Duration, Instant};
 use winit::{
     dpi::PhysicalSize,
     event::{ElementState, Event, VirtualKeyCode, WindowEvent},
@@ -8,6 +10,7 @@ use winit::{
 
 const WIDTH: u32 = 1920;
 const HEIGHT: u32 = 1080;
+const FRAME_DURATION: Duration = Duration::from_millis(16); // ~60 FPS
 
 fn main() -> Result<(), Error> {
     let event_loop = EventLoop::new();
@@ -41,11 +44,26 @@ fn main() -> Result<(), Error> {
     let mut square_x = (size.width / 2).saturating_sub(square_size / 2);
     let mut square_y = (size.height / 2).saturating_sub(square_size / 2);
 
+    // Track currently pressed keys for multi-key support
+    let mut pressed_keys: HashSet<VirtualKeyCode> = HashSet::new();
+
     event_loop.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Wait;
+        // Schedule next wake depending on whether we need continuous updates
+        if pressed_keys.is_empty() {
+            *control_flow = ControlFlow::Wait;
+        } else {
+            *control_flow = ControlFlow::WaitUntil(Instant::now() + FRAME_DURATION);
+        }
 
         match event {
             Event::RedrawRequested(_) => {
+                // Apply movement based on keys held down
+                let moved = apply_movement(&pressed_keys, &mut square_x, &mut square_y, 15u32, square_size, size);
+                if moved {
+                    // request a redraw so movement is continuous
+                    window.request_redraw();
+                }
+
                 // `pixels.frame()` returns an immutable slice in this pixels version; create a
                 // mutable view into the same memory so we can modify pixels.
                 let frame_immutable = pixels.frame();
@@ -80,13 +98,12 @@ fn main() -> Result<(), Error> {
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                 WindowEvent::KeyboardInput { input, .. } => {
-                    // Delegate keyboard handling to a helper function.
-                    let (moved, exit) = handle_keyboard_input(input, &mut square_x, &mut square_y, square_size, size);
-                    if let Some(cf) = exit {
-                        *control_flow = cf;
-                    } else if moved {
-                        // Request a redraw after moving
-                        window.request_redraw();
+                    // Update pressed keys set; handle escape immediately
+                    update_pressed_keys(&input, &mut pressed_keys);
+                    if input.state == ElementState::Pressed {
+                        if let Some(VirtualKeyCode::Escape) = input.virtual_keycode {
+                            *control_flow = ControlFlow::Exit;
+                        }
                     }
                 }
                 WindowEvent::Resized(new_size) => {
@@ -105,7 +122,10 @@ fn main() -> Result<(), Error> {
                 _ => {}
             },
             Event::MainEventsCleared => {
-                window.request_redraw();
+                // Keep redrawing while keys are pressed for smooth movement
+                if !pressed_keys.is_empty() {
+                    window.request_redraw();
+                }
             }
             _ => {}
         }
@@ -114,40 +134,47 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
-/// Handle arrow keys and escape. Returns (moved, optional ControlFlow).
-fn handle_keyboard_input(
-    input: winit::event::KeyboardInput,
+fn update_pressed_keys(input: &winit::event::KeyboardInput, pressed_keys: &mut HashSet<VirtualKeyCode>) {
+    match (input.virtual_keycode, input.state) {
+        (Some(key), ElementState::Pressed) => {
+            pressed_keys.insert(key);
+        }
+        (Some(key), ElementState::Released) => {
+            pressed_keys.remove(&key);
+        }
+        _ => {}
+    }
+}
+
+/// Apply movement based on currently pressed keys. Returns true if position changed.
+fn apply_movement(
+    pressed_keys: &HashSet<VirtualKeyCode>,
     square_x: &mut u32,
     square_y: &mut u32,
+    step: u32,
     square_size: u32,
     size: PhysicalSize<u32>,
-) -> (bool, Option<ControlFlow>) {
-    if input.state != ElementState::Pressed {
-        return (false, None);
+) -> bool {
+    let mut moved = false;
+
+    if pressed_keys.contains(&VirtualKeyCode::Left) {
+        *square_x = square_x.saturating_sub(step);
+        moved = true;
+    }
+    if pressed_keys.contains(&VirtualKeyCode::Right) {
+        *square_x = (*square_x + step).min(size.width.saturating_sub(square_size));
+        moved = true;
+    }
+    if pressed_keys.contains(&VirtualKeyCode::Up) {
+        *square_y = square_y.saturating_sub(step);
+        moved = true;
+    }
+    if pressed_keys.contains(&VirtualKeyCode::Down) {
+        *square_y = (*square_y + step).min(size.height.saturating_sub(square_size));
+        moved = true;
     }
 
-    // Move step increased for faster movement
-    let step = 15u32;
-    match input.virtual_keycode {
-        Some(VirtualKeyCode::Left) => {
-            *square_x = square_x.saturating_sub(step);
-            (true, None)
-        }
-        Some(VirtualKeyCode::Right) => {
-            *square_x = (*square_x + step).min(size.width.saturating_sub(square_size));
-            (true, None)
-        }
-        Some(VirtualKeyCode::Up) => {
-            *square_y = square_y.saturating_sub(step);
-            (true, None)
-        }
-        Some(VirtualKeyCode::Down) => {
-            *square_y = (*square_y + step).min(size.height.saturating_sub(square_size));
-            (true, None)
-        }
-        Some(VirtualKeyCode::Escape) => (false, Some(ControlFlow::Exit)),
-        _ => (false, None),
-    }
+    moved
 }
 
 fn set_pixel(frame: &mut [u8], frame_width: u32, x: u32, y: u32, color: [u8; 4]) {

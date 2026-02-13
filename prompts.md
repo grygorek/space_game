@@ -16,3 +16,7 @@ Prompt: _Refactor the code. Move the key handling to separate functions._
 Prompt: _Move the square a bit faster_
 
 --------------------------------
+Prompt: Can you improve keyboard handling so when I move my square with keyboards it does not stop moving when I press another keyboard (e.g. space). Something like a multikey support.
+
+Prompt: It is not fully working. If i hold Left and press space, the movement stops until I press space again. Seems like redraw is called only when a key event comes.
+
