@@ -32,9 +32,14 @@ fn main() -> Result<(), Error> {
     }
 
     // Use the actual window inner size for the pixel surface.
-    let size = window.inner_size();
+    let mut size = window.inner_size();
     let surface_texture = SurfaceTexture::new(size.width, size.height, &window);
     let mut pixels = Pixels::new(size.width, size.height, surface_texture)?;
+
+    // Square state (position). Start centered.
+    let square_size: u32 = 20;
+    let mut square_x = (size.width / 2).saturating_sub(square_size / 2);
+    let mut square_y = (size.height / 2).saturating_sub(square_size / 2);
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -55,18 +60,15 @@ fn main() -> Result<(), Error> {
                 }
 
                 // Yellow pixels at corners
-                set_pixel(frame, 0, 0, [255, 255, 0, 255]);
-                set_pixel(frame, size.width - 1, 0, [255, 255, 0, 255]);
-                set_pixel(frame, 0, size.height - 1, [255, 255, 0, 255]);
-                set_pixel(frame, size.width - 1, size.height - 1, [255, 255, 0, 255]);
+                set_pixel(frame, size.width, 0, 0, [255, 255, 0, 255]);
+                set_pixel(frame, size.width, size.width - 1, 0, [255, 255, 0, 255]);
+                set_pixel(frame, size.width, 0, size.height - 1, [255, 255, 0, 255]);
+                set_pixel(frame, size.width, size.width - 1, size.height - 1, [255, 255, 0, 255]);
 
-                // Red 20x20 square in center
-                let square_size = 20u32;
-                let start_x = (size.width / 2).saturating_sub(square_size / 2);
-                let start_y = (size.height / 2).saturating_sub(square_size / 2);
-                for y in start_y..start_y + square_size {
-                    for x in start_x..start_x + square_size {
-                        set_pixel(frame, x, y, [255, 0, 0, 255]);
+                // Red square at current position
+                for y in square_y..(square_y + square_size) {
+                    for x in square_x..(square_x + square_size) {
+                        set_pixel(frame, size.width, x, y, [255, 0, 0, 255]);
                     }
                 }
 
@@ -78,15 +80,27 @@ fn main() -> Result<(), Error> {
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                 WindowEvent::KeyboardInput { input, .. } => {
-                    if input.state == ElementState::Pressed {
-                        if let Some(VirtualKeyCode::Escape) = input.virtual_keycode {
-                            *control_flow = ControlFlow::Exit;
-                        }
+                    // Delegate keyboard handling to a helper function.
+                    let (moved, exit) = handle_keyboard_input(input, &mut square_x, &mut square_y, square_size, size);
+                    if let Some(cf) = exit {
+                        *control_flow = cf;
+                    } else if moved {
+                        // Request a redraw after moving
+                        window.request_redraw();
                     }
                 }
-                WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
-                    let size = window.inner_size();
+                WindowEvent::Resized(new_size) => {
+                    size = new_size;
                     pixels.resize_surface(size.width, size.height);
+                    // Clamp square position to new bounds
+                    square_x = square_x.min(size.width.saturating_sub(square_size));
+                    square_y = square_y.min(size.height.saturating_sub(square_size));
+                }
+                WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                    size = *new_inner_size;
+                    pixels.resize_surface(size.width, size.height);
+                    square_x = square_x.min(size.width.saturating_sub(square_size));
+                    square_y = square_y.min(size.height.saturating_sub(square_size));
                 }
                 _ => {}
             },
@@ -100,8 +114,45 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
-fn set_pixel(frame: &mut [u8], x: u32, y: u32, color: [u8; 4]) {
-    let idx = ((y * WIDTH + x) * 4) as usize;
+/// Handle arrow keys and escape. Returns (moved, optional ControlFlow).
+fn handle_keyboard_input(
+    input: winit::event::KeyboardInput,
+    square_x: &mut u32,
+    square_y: &mut u32,
+    square_size: u32,
+    size: PhysicalSize<u32>,
+) -> (bool, Option<ControlFlow>) {
+    if input.state != ElementState::Pressed {
+        return (false, None);
+    }
+
+    // Move step increased for faster movement
+    let step = 15u32;
+    match input.virtual_keycode {
+        Some(VirtualKeyCode::Left) => {
+            *square_x = square_x.saturating_sub(step);
+            (true, None)
+        }
+        Some(VirtualKeyCode::Right) => {
+            *square_x = (*square_x + step).min(size.width.saturating_sub(square_size));
+            (true, None)
+        }
+        Some(VirtualKeyCode::Up) => {
+            *square_y = square_y.saturating_sub(step);
+            (true, None)
+        }
+        Some(VirtualKeyCode::Down) => {
+            *square_y = (*square_y + step).min(size.height.saturating_sub(square_size));
+            (true, None)
+        }
+        Some(VirtualKeyCode::Escape) => (false, Some(ControlFlow::Exit)),
+        _ => (false, None),
+    }
+}
+
+fn set_pixel(frame: &mut [u8], frame_width: u32, x: u32, y: u32, color: [u8; 4]) {
+    // compute index using the provided frame width
+    let idx = ((y * frame_width + x) * 4) as usize;
     if idx + 3 < frame.len() {
         frame[idx..idx + 4].copy_from_slice(&color);
     }
