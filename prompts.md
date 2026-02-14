@@ -73,3 +73,4 @@ Prompt: There is ship.png file in the 'png' subdirectory. Add code to load that 
 
 Prompt: Create a new file called drawing.rs and move 'blend_pixel', set_pixel to that new file. Also move ship sprite drawing code to a dedicated function. I think this function would be generic for different sprites. Am I right? Then move it to drawing.rs too.
 
+Prempt: Rename 'square' to 'ship'

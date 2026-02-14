@@ -31,7 +31,7 @@ fn main() -> Result<(), Error> {
     });
 }
 
-struct Square {
+struct Ship {
     x: u32,
     y: u32,
     size: u32,
@@ -41,7 +41,7 @@ struct App {
     window: Window,
     pixels: Pixels,
     size: PhysicalSize<u32>,
-    square: Square,
+    ship: Ship,
     pressed_keys: HashSet<VirtualKeyCode>,
     stars: Vec<Star>,
     rng: SimpleRng,
@@ -67,11 +67,11 @@ impl App {
         let surface_texture = SurfaceTexture::new(size.width, size.height, &window);
         let pixels = Pixels::new(size.width, size.height, surface_texture)?;
 
-        let square_size = 20u32;
-        let square = Square {
-            x: (size.width / 2).saturating_sub(square_size / 2),
-            y: (size.height / 2).saturating_sub(square_size / 2),
-            size: square_size,
+        let ship_size = 20u32;
+        let ship = Ship {
+            x: (size.width / 2).saturating_sub(ship_size / 2),
+            y: (size.height / 2).saturating_sub(ship_size / 2),
+            size: ship_size,
         };
 
         // Generate stars
@@ -88,7 +88,7 @@ impl App {
             window,
             pixels,
             size,
-            square,
+            ship,
             pressed_keys: HashSet::new(),
             stars,
             rng,
@@ -145,9 +145,9 @@ impl App {
             draw_star(frame, self.size.width, star);
         }
 
-        // Draw ship sprite centered on square
-        let sx = self.square.x as i32;
-        let sy = self.square.y as i32;
+        // Draw ship sprite centered on ship logical position
+        let sx = self.ship.x as i32;
+        let sy = self.ship.y as i32;
         draw_sprite(
             frame,
             self.size.width,
@@ -178,14 +178,14 @@ impl App {
             WindowEvent::Resized(new_size) => {
                 self.size = new_size;
                 let _ = self.pixels.resize_surface(self.size.width, self.size.height);
-                self.square.x = self.square.x.min(self.size.width.saturating_sub(self.square.size));
-                self.square.y = self.square.y.min(self.size.height.saturating_sub(self.square.size));
+                self.ship.x = self.ship.x.min(self.size.width.saturating_sub(self.ship.size));
+                self.ship.y = self.ship.y.min(self.size.height.saturating_sub(self.ship.size));
             }
             WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
                 self.size = *new_inner_size;
                 let _ = self.pixels.resize_surface(self.size.width, self.size.height);
-                self.square.x = self.square.x.min(self.size.width.saturating_sub(self.square.size));
-                self.square.y = self.square.y.min(self.size.height.saturating_sub(self.square.size));
+                self.ship.x = self.ship.x.min(self.size.width.saturating_sub(self.ship.size));
+                self.ship.y = self.ship.y.min(self.size.height.saturating_sub(self.ship.size));
             }
             _ => {}
         }
@@ -206,19 +206,19 @@ impl App {
     fn apply_movement(&mut self, step: u32) -> bool {
         let mut moved = false;
         if self.pressed_keys.contains(&VirtualKeyCode::Left) {
-            self.square.x = self.square.x.saturating_sub(step);
+            self.ship.x = self.ship.x.saturating_sub(step);
             moved = true;
         }
         if self.pressed_keys.contains(&VirtualKeyCode::Right) {
-            self.square.x = (self.square.x + step).min(self.size.width.saturating_sub(self.square.size));
+            self.ship.x = (self.ship.x + step).min(self.size.width.saturating_sub(self.ship.size));
             moved = true;
         }
         if self.pressed_keys.contains(&VirtualKeyCode::Up) {
-            self.square.y = self.square.y.saturating_sub(step);
+            self.ship.y = self.ship.y.saturating_sub(step);
             moved = true;
         }
         if self.pressed_keys.contains(&VirtualKeyCode::Down) {
-            self.square.y = (self.square.y + step).min(self.size.height.saturating_sub(self.square.size));
+            self.ship.y = (self.ship.y + step).min(self.size.height.saturating_sub(self.ship.size));
             moved = true;
         }
         moved
