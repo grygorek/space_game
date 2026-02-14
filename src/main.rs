@@ -15,6 +15,9 @@ const WIDTH: u32 = 1920;
 const HEIGHT: u32 = 1080;
 const FRAME_DURATION: Duration = Duration::from_millis(16); // ~60 FPS
 
+// Embed ship image bytes (png/ship.png)
+static SHIP_PNG: &[u8] = include_bytes!("../png/ship.png");
+
 fn main() -> Result<(), Error> {
     let event_loop = EventLoop::new();
 
@@ -40,6 +43,11 @@ struct App {
     pressed_keys: HashSet<VirtualKeyCode>,
     stars: Vec<Star>,
     rng: SimpleRng,
+
+    // Ship sprite
+    ship_pixels: Vec<u8>, // RGBA8 raw pixels
+    ship_w: u32,
+    ship_h: u32,
 }
 
 impl App {
@@ -68,6 +76,12 @@ impl App {
         let mut rng = SimpleRng::seed_from_instant();
         let stars = generate_stars(&mut rng, size);
 
+        // Decode ship PNG
+        let img = image::load_from_memory(SHIP_PNG).expect("Failed to load ship.png").to_rgba8();
+        let ship_w = img.width();
+        let ship_h = img.height();
+        let ship_pixels = img.into_raw();
+
         Ok(Self {
             window,
             pixels,
@@ -76,6 +90,9 @@ impl App {
             pressed_keys: HashSet::new(),
             stars,
             rng,
+            ship_pixels,
+            ship_w,
+            ship_h,
         })
     }
 
@@ -126,10 +143,30 @@ impl App {
             draw_star(frame, self.size.width, star);
         }
 
-        // Draw square
-        for y in self.square.y..(self.square.y + self.square.size) {
-            for x in self.square.x..(self.square.x + self.square.size) {
-                stars::set_pixel(frame, self.size.width, x, y, [255, 0, 0, 255]);
+        // Draw ship sprite centered on square
+        let sx = self.square.x as i32;
+        let sy = self.square.y as i32;
+        for yy in 0..(self.ship_h as i32) {
+            for xx in 0..(self.ship_w as i32) {
+                let px = sx + xx;
+                let py = sy + yy;
+                if px < 0 || py < 0 {
+                    continue;
+                }
+                let px = px as u32;
+                let py = py as u32;
+                if px >= self.size.width || py >= self.size.height {
+                    continue;
+                }
+                let idx = ((yy as u32 * self.ship_w + xx as u32) * 4) as usize;
+                let src = [
+                    self.ship_pixels[idx],
+                    self.ship_pixels[idx + 1],
+                    self.ship_pixels[idx + 2],
+                    self.ship_pixels[idx + 3],
+                ];
+                // blend over background
+                stars::blend_pixel(frame, self.size.width, px, py, src);
             }
         }
 

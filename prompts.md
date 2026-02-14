@@ -52,3 +52,22 @@ cargo build warning: unused import: MAX_STARS --> src\main.rs:12:57 | 12 | use s
 warning: unused Result that must be used --> src\main.rs:155:17 | 155 |                 self.pixels.resize_surface(self.size.width, self.size.height); |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ | = note: this Result may be an Err variant, which should be handled = note: #[warn(unused_must_use)] on by default help: use let _ = ... to ignore the resulting value | 155 |                 let _ = self.pixels.resize_surface(self.size.width, self.size.height); |                 +++++++
 warning: unused Result that must be used --> src\main.rs:161:17 | 161 |                 self.pixels.resize_surface(self.size.width, self.size.height); |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ | = note: this Result may be an Err variant, which should be handled help: use let _ = ... to ignore the resulting value | 161 |                 let _ = self.pixels.resize_surface(self.size.width, self.size.height); |                 +++++++
 
+--------------------------------
+
+Prompt: I would like to replace the square with an image of a spaceship. In what format of the file would be best to include picture of that spaceship in this application?
+
+It suggested:
+
+Use a PNG with RGBA (8-bit per channel).
+
+I went to Google Gemini and generated an image with this prompt:
+I am writing a game where I control a spaceship pointing towards top of the screen. Can you generate PNG image of my spaceship. Image 100x100 pixels
+
+The image was actually not 100x100 and did not have trasparent background. I went to Gimp and removed the background and resized the image. Not exaclty 100x100. Just from edge to edge of the spaceship.
+
+Next I downloaded the generated image to png/ship.png
+
+Prompt: There is ship.png file in the 'png' subdirectory. Add code to load that file and replace my red square with the loaded ship image.
+
+--------------------------------
+
