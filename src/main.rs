@@ -11,6 +11,7 @@ use winit::{
 const WIDTH: u32 = 1920;
 const HEIGHT: u32 = 1080;
 const FRAME_DURATION: Duration = Duration::from_millis(16); // ~60 FPS
+const MAX_STARS: usize = 20;
 
 fn main() -> Result<(), Error> {
     let event_loop = EventLoop::new();
@@ -29,12 +30,21 @@ struct Square {
     size: u32,
 }
 
+struct Star {
+    x: u32,
+    y: u32,
+    diameter: u32,
+    color: [u8; 4], // RGBA
+}
+
 struct App {
     window: Window,
     pixels: Pixels,
     size: PhysicalSize<u32>,
     square: Square,
     pressed_keys: HashSet<VirtualKeyCode>,
+    stars: Vec<Star>,
+    rng: SimpleRng,
 }
 
 impl App {
@@ -59,22 +69,24 @@ impl App {
             size: square_size,
         };
 
+        // Generate stars
+        let mut rng = SimpleRng::seed_from_instant();
+        let stars = generate_stars(&mut rng, size);
+
         Ok(Self {
             window,
             pixels,
             size,
             square,
             pressed_keys: HashSet::new(),
+            stars,
+            rng,
         })
     }
 
     fn handle_event(&mut self, event: Event<()>, control_flow: &mut ControlFlow) {
-        // Determine desired wake behavior based on pressed keys
-        if self.pressed_keys.is_empty() {
-            *control_flow = ControlFlow::Wait;
-        } else {
-            *control_flow = ControlFlow::WaitUntil(Instant::now() + FRAME_DURATION);
-        }
+        // Drive continuous animation at FRAME_DURATION even when no keys are pressed
+        *control_flow = ControlFlow::WaitUntil(Instant::now() + FRAME_DURATION);
 
         match event {
             Event::RedrawRequested(_) => {
@@ -84,15 +96,17 @@ impl App {
                 self.on_window_event(event, control_flow);
             }
             Event::MainEventsCleared => {
-                if !self.pressed_keys.is_empty() {
-                    self.window.request_redraw();
-                }
+                // Always request redraw to keep stars animating
+                self.window.request_redraw();
             }
             _ => {}
         }
     }
 
     fn on_redraw(&mut self) {
+        // Update stars (falling)
+        self.update_stars();
+
         // Apply movement based on keys held down
         let moved = self.apply_movement(15u32);
         if moved {
@@ -107,9 +121,14 @@ impl App {
             std::slice::from_raw_parts_mut(frame_immutable.as_ptr() as *mut u8, frame_len)
         };
 
-        // Clear to black
+        // Clear to black (interstellar space)
         for pixel in frame.chunks_exact_mut(4) {
             pixel.copy_from_slice(&[0, 0, 0, 255]);
+        }
+
+        // Draw stars
+        for star in &self.stars {
+            draw_star(frame, self.size.width, star);
         }
 
         // Draw corner yellow pixels
@@ -190,6 +209,35 @@ impl App {
         }
         moved
     }
+
+    fn update_stars(&mut self) {
+        for star in &mut self.stars {
+            // speed depends on diameter: larger stars fall slightly faster
+            let speed = (star.diameter / 2).max(1);
+            star.y = star.y.saturating_add(speed);
+            if star.y > self.size.height {
+                // reset to top with new random properties
+                star.diameter = (self.rng.next_u32() % 5) + 1;
+                let radius = star.diameter / 2;
+                // avoid underflow if diameter > width
+                if self.size.width > star.diameter {
+                    star.x = (self.rng.next_u32() % (self.size.width.saturating_sub(star.diameter) + 1)) + radius;
+                } else {
+                    star.x = 0;
+                }
+                star.y = 0;
+                let choice = self.rng.next_u32() % 4;
+                let alpha = 100 + (self.rng.next_u32() % 156) as u8; // 100..255
+                star.color = match choice {
+                    0 => [150, 180, 255, alpha], // bluish
+                    1 => [200, 200, 220, alpha], // grayish
+                    2 => [255, 230, 160, alpha], // yellowish
+                    3 => [255, 150, 150, alpha], // reddish
+                    _ => [200, 200, 200, alpha],
+                };
+            }
+        }
+    }
 }
 
 fn try_set_fullscreen(event_loop: &EventLoop<()>, window: &Window) {
@@ -205,9 +253,80 @@ fn try_set_fullscreen(event_loop: &EventLoop<()>, window: &Window) {
     }
 }
 
+fn generate_stars(rng: &mut SimpleRng, size: PhysicalSize<u32>) -> Vec<Star> {
+    let count = (rng.next_u32() as usize % (MAX_STARS + 1)).max(5); // between 5 and MAX_STARS
+    let mut stars = Vec::with_capacity(count);
+    for _ in 0..count {
+        let diameter = (rng.next_u32() % 5) + 1; // 1..5
+        let radius = diameter / 2;
+        let x = (rng.next_u32() % (size.width.saturating_sub(diameter) + 1)) + radius;
+        let y = (rng.next_u32() % (size.height.saturating_sub(diameter) + 1)) + radius;
+
+        // Color palettes: bluish, gray, yellowish, reddish
+        let choice = rng.next_u32() % 4;
+        let alpha = 100 + (rng.next_u32() % 156) as u8; // 100..255
+        let color = match choice {
+            0 => [150, 180, 255, alpha], // bluish
+            1 => [200, 200, 220, alpha], // grayish
+            2 => [255, 230, 160, alpha], // yellowish
+            3 => [255, 150, 150, alpha], // reddish
+            _ => [200, 200, 200, alpha],
+        };
+
+        stars.push(Star { x, y, diameter, color });
+    }
+    stars
+}
+
+fn draw_star(frame: &mut [u8], frame_width: u32, star: &Star) {
+    let r = (star.diameter as i32) / 2;
+    let cx = star.x as i32;
+    let cy = star.y as i32;
+    for dy in -r..=r {
+        for dx in -r..=r {
+            let sx = cx + dx;
+            let sy = cy + dy;
+            if sx < 0 || sy < 0 {
+                continue;
+            }
+            // circle mask
+            if dx * dx + dy * dy <= r * r {
+                set_pixel(frame, frame_width, sx as u32, sy as u32, star.color);
+            }
+        }
+    }
+}
+
+// Simple xorshift RNG to avoid adding dependencies
+struct SimpleRng(u64);
+impl SimpleRng {
+    fn seed_from_instant() -> Self {
+        // Use system time since UNIX_EPOCH to create a seed
+        let seed = match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+            Ok(dur) => dur.as_nanos() as u64,
+            Err(_) => 0u64,
+        };
+        SimpleRng(seed.wrapping_add(0x9E3779B97F4A7C15))
+    }
+
+    fn next_u64(&mut self) -> u64 {
+        let mut x = self.0;
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        self.0 = x;
+        x
+    }
+
+    fn next_u32(&mut self) -> u32 {
+        (self.next_u64() & 0xFFFF_FFFF) as u32
+    }
+}
+
 fn set_pixel(frame: &mut [u8], frame_width: u32, x: u32, y: u32, color: [u8; 4]) {
     let idx = ((y * frame_width + x) * 4) as usize;
     if idx + 3 < frame.len() {
+        // simple overwrite; alpha channel is stored but we don't blend
         frame[idx..idx + 4].copy_from_slice(&color);
     }
 }

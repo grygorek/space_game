@@ -22,3 +22,11 @@ Prompt: It is not fully working. If i hold Left and press space, the movement st
 
 Prompt: The main function is very large and handling different operations. Refactor the code. Split on functions and structures if needed.
 
+--------------------------------
+
+Prompt: The black background is the interstellar space. Please generate stars in the background. The largest stars are max 5pixels in diameter and the smallest 1pixel. Some are faint bluish, other graish, other yellowish and other reddish. Max count of stars 20 but can be less.
+
+Prompt: Make the stars animated falling slowly from the top of the screen. It will feel like my square is moving in the space.
+
+Prompt: The stars are moving only when my square is moving. Please make the stars moving regardless of the square movement.
+
