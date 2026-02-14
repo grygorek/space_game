@@ -30,3 +30,20 @@ Prompt: Make the stars animated falling slowly from the top of the screen. It wi
 
 Prompt: The stars are moving only when my square is moving. Please make the stars moving regardless of the square movement.
 
+--------------------------------
+
+Prompt: Remove the corner yellow pixels. Move the stars related code out of main.rs to a dedicated file.
+
+(Running out of tokens at this stage. Starting new chat.)
+
+Prompt: Our context: We build together a Rust game like desktop application. There are stars falling down from the top of the screen and black background. There is a red square that I can control its movement with cursors. Hitting other keys does not interrupt the movement. Do not modify any of the files yet.
+
+
+Prompt: The stars generation and drawing code is in stars.rs. But I think it is duplicated in main.rs too. Can you remove that code from main.rs please.
+
+Prompt: Remove drawing yellow pixels in the corner of the screen.
+
+Prompt: Move update_stars function from main.rs to stars.rs
+
+--------------------------------
+
