@@ -47,3 +47,8 @@ Prompt: Move update_stars function from main.rs to stars.rs
 
 --------------------------------
 
+Prompt: There is few build warnings. Are they fixeable?
+cargo build warning: unused import: MAX_STARS --> src\main.rs:12:57 | 12 | use stars::{generate_stars, draw_star, SimpleRng, Star, MAX_STARS}; |                                                         ^^^^^^^^^ | = note: #[warn(unused_imports)] on by default
+warning: unused Result that must be used --> src\main.rs:155:17 | 155 |                 self.pixels.resize_surface(self.size.width, self.size.height); |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ | = note: this Result may be an Err variant, which should be handled = note: #[warn(unused_must_use)] on by default help: use let _ = ... to ignore the resulting value | 155 |                 let _ = self.pixels.resize_surface(self.size.width, self.size.height); |                 +++++++
+warning: unused Result that must be used --> src\main.rs:161:17 | 161 |                 self.pixels.resize_surface(self.size.width, self.size.height); |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ | = note: this Result may be an Err variant, which should be handled help: use let _ = ... to ignore the resulting value | 161 |                 let _ = self.pixels.resize_surface(self.size.width, self.size.height); |                 +++++++
+

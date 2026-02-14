@@ -9,7 +9,7 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::{Fullscreen, Window, WindowBuilder},
 };
-use stars::{generate_stars, draw_star, SimpleRng, Star, MAX_STARS};
+use stars::{generate_stars, draw_star, SimpleRng, Star};
 
 const WIDTH: u32 = 1920;
 const HEIGHT: u32 = 1080;
@@ -152,13 +152,13 @@ impl App {
             }
             WindowEvent::Resized(new_size) => {
                 self.size = new_size;
-                self.pixels.resize_surface(self.size.width, self.size.height);
+                let _ = self.pixels.resize_surface(self.size.width, self.size.height);
                 self.square.x = self.square.x.min(self.size.width.saturating_sub(self.square.size));
                 self.square.y = self.square.y.min(self.size.height.saturating_sub(self.square.size));
             }
             WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
                 self.size = *new_inner_size;
-                self.pixels.resize_surface(self.size.width, self.size.height);
+                let _ = self.pixels.resize_surface(self.size.width, self.size.height);
                 self.square.x = self.square.x.min(self.size.width.saturating_sub(self.square.size));
                 self.square.y = self.square.y.min(self.size.height.saturating_sub(self.square.size));
             }
