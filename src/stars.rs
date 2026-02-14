@@ -1,4 +1,5 @@
 use winit::dpi::PhysicalSize;
+use crate::drawing::set_pixel;
 
 pub const MAX_STARS: usize = 20;
 
@@ -108,46 +109,4 @@ impl SimpleRng {
     pub fn next_u32(&mut self) -> u32 {
         (self.next_u64() & 0xFFFF_FFFF) as u32
     }
-}
-
-pub fn set_pixel(frame: &mut [u8], frame_width: u32, x: u32, y: u32, color: [u8; 4]) {
-    let idx = ((y * frame_width + x) * 4) as usize;
-    if idx + 3 < frame.len() {
-        frame[idx..idx + 4].copy_from_slice(&color);
-    }
-}
-
-// Blend src RGBA over destination pixel at (x,y) in frame.
-pub fn blend_pixel(frame: &mut [u8], frame_width: u32, x: u32, y: u32, src: [u8; 4]) {
-    let idx = ((y * frame_width + x) * 4) as usize;
-    if idx + 3 >= frame.len() {
-        return;
-    }
-    let dst_r = frame[idx] as f32;
-    let dst_g = frame[idx + 1] as f32;
-    let dst_b = frame[idx + 2] as f32;
-    let dst_a = frame[idx + 3] as f32 / 255.0;
-
-    let src_r = src[0] as f32;
-    let src_g = src[1] as f32;
-    let src_b = src[2] as f32;
-    let src_a = src[3] as f32 / 255.0;
-
-    let out_a = src_a + dst_a * (1.0 - src_a);
-    if out_a <= 0.0 {
-        frame[idx] = 0;
-        frame[idx + 1] = 0;
-        frame[idx + 2] = 0;
-        frame[idx + 3] = 0;
-        return;
-    }
-
-    let out_r = (src_r * src_a + dst_r * dst_a * (1.0 - src_a)) / out_a;
-    let out_g = (src_g * src_a + dst_g * dst_a * (1.0 - src_a)) / out_a;
-    let out_b = (src_b * src_a + dst_b * dst_a * (1.0 - src_a)) / out_a;
-
-    frame[idx] = out_r as u8;
-    frame[idx + 1] = out_g as u8;
-    frame[idx + 2] = out_b as u8;
-    frame[idx + 3] = (out_a * 255.0) as u8;
 }

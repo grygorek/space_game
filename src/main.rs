@@ -1,3 +1,4 @@
+mod drawing;
 mod stars;
 
 use pixels::{Error, Pixels, SurfaceTexture};
@@ -10,6 +11,7 @@ use winit::{
     window::{Fullscreen, Window, WindowBuilder},
 };
 use stars::{generate_stars, draw_star, SimpleRng, Star};
+use drawing::draw_sprite;
 
 const WIDTH: u32 = 1920;
 const HEIGHT: u32 = 1080;
@@ -146,29 +148,15 @@ impl App {
         // Draw ship sprite centered on square
         let sx = self.square.x as i32;
         let sy = self.square.y as i32;
-        for yy in 0..(self.ship_h as i32) {
-            for xx in 0..(self.ship_w as i32) {
-                let px = sx + xx;
-                let py = sy + yy;
-                if px < 0 || py < 0 {
-                    continue;
-                }
-                let px = px as u32;
-                let py = py as u32;
-                if px >= self.size.width || py >= self.size.height {
-                    continue;
-                }
-                let idx = ((yy as u32 * self.ship_w + xx as u32) * 4) as usize;
-                let src = [
-                    self.ship_pixels[idx],
-                    self.ship_pixels[idx + 1],
-                    self.ship_pixels[idx + 2],
-                    self.ship_pixels[idx + 3],
-                ];
-                // blend over background
-                stars::blend_pixel(frame, self.size.width, px, py, src);
-            }
-        }
+        draw_sprite(
+            frame,
+            self.size.width,
+            sx,
+            sy,
+            &self.ship_pixels,
+            self.ship_w,
+            self.ship_h,
+        );
 
         if self.pixels.render().is_err() {
             // On render failure, just exit the event loop on next opportunity
