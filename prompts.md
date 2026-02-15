@@ -78,3 +78,9 @@ Prempt: Rename 'square' to 'ship'
 --------------------------------
 
 I asked Gemini to generate a laser beam. It looked good. I removed background and resized to 5x20pix. Added as beam.png.
+
+--------------------------------
+
+Prompt: Improve performance. Improve ship clipping at bottom of the screen.
+
+--------------------------------

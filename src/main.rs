@@ -1,40 +1,59 @@
 mod drawing;
 mod stars;
 
+use drawing::draw_sprite;
 use pixels::{Error, Pixels, SurfaceTexture};
+use stars::{draw_star, generate_stars, SimpleRng, Star};
 use std::collections::HashSet;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use winit::{
     dpi::PhysicalSize,
     event::{ElementState, Event, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::{Fullscreen, Window, WindowBuilder},
 };
-use stars::{generate_stars, draw_star, SimpleRng, Star};
-use drawing::draw_sprite;
 
 const WIDTH: u32 = 1920;
 const HEIGHT: u32 = 1080;
-const FRAME_DURATION: Duration = Duration::from_millis(16); // ~60 FPS
 
 // Embed ship image bytes (png/ship.png)
 static SHIP_PNG: &[u8] = include_bytes!("../png/ship.png");
 
 fn main() -> Result<(), Error> {
     let event_loop = EventLoop::new();
-
     let mut app = App::new(&event_loop)?;
 
+    let mut last_time = Instant::now();
+
     event_loop.run(move |event, _, control_flow| {
-        // Delegate all event handling to the application instance.
-        app.handle_event(event, control_flow);
+        match event {
+            // Only calculate physics right before we draw
+            Event::RedrawRequested(_) => {
+                let now = Instant::now();
+                let dt = now.duration_since(last_time).as_secs_f32();
+                last_time = now;
+
+                // Cap dt to prevent "teleporting" if the window is dragged
+                let dt = dt.min(0.1);
+
+                app.update(dt);
+                app.draw();
+            }
+            Event::MainEventsCleared => {
+                app.window.request_redraw();
+            }
+            Event::WindowEvent { event, .. } => {
+                app.handle_window_event(event, control_flow);
+            }
+            _ => {}
+        }
     });
 }
 
 struct Ship {
-    x: u32,
-    y: u32,
-    size: u32,
+    x: f32,
+    y: f32,
+    speed: f32,
 }
 
 struct App {
@@ -45,9 +64,7 @@ struct App {
     pressed_keys: HashSet<VirtualKeyCode>,
     stars: Vec<Star>,
     rng: SimpleRng,
-
-    // Ship sprite
-    ship_pixels: Vec<u8>, // RGBA8 raw pixels
+    ship_pixels: Vec<u8>,
     ship_w: u32,
     ship_h: u32,
 }
@@ -55,31 +72,29 @@ struct App {
 impl App {
     fn new(event_loop: &EventLoop<()>) -> Result<Self, Error> {
         let window = WindowBuilder::new()
-            .with_title("Full HD Graphics")
+            .with_title("Full HD Starship")
             .with_inner_size(PhysicalSize::new(WIDTH, HEIGHT))
             .build(event_loop)
             .unwrap();
 
-        // Try to set fullscreen modes
         try_set_fullscreen(event_loop, &window);
 
         let size = window.inner_size();
         let surface_texture = SurfaceTexture::new(size.width, size.height, &window);
         let pixels = Pixels::new(size.width, size.height, surface_texture)?;
 
-        let ship_size = 20u32;
         let ship = Ship {
-            x: (size.width / 2).saturating_sub(ship_size / 2),
-            y: (size.height / 2).saturating_sub(ship_size / 2),
-            size: ship_size,
+            x: (size.width / 2) as f32,
+            y: (size.height / 2) as f32,
+            speed: 300.0,
         };
 
-        // Generate stars
         let mut rng = SimpleRng::seed_from_instant();
         let stars = generate_stars(&mut rng, size);
 
-        // Decode ship PNG
-        let img = image::load_from_memory(SHIP_PNG).expect("Failed to load ship.png").to_rgba8();
+        let img = image::load_from_memory(SHIP_PNG)
+            .expect("Failed to load ship.png")
+            .to_rgba8();
         let ship_w = img.width();
         let ship_h = img.height();
         let ship_pixels = img.into_raw();
@@ -98,142 +113,104 @@ impl App {
         })
     }
 
-    fn handle_event(&mut self, event: Event<()>, control_flow: &mut ControlFlow) {
-        // Drive continuous animation at FRAME_DURATION even when no keys are pressed
-        *control_flow = ControlFlow::WaitUntil(Instant::now() + FRAME_DURATION);
+    fn update(&mut self, dt: f32) {
+        stars::update_stars(&mut self.stars, &mut self.rng, self.size, dt);
 
-        match event {
-            Event::RedrawRequested(_) => {
-                self.on_redraw();
-            }
-            Event::WindowEvent { event, .. } => {
-                self.on_window_event(event, control_flow);
-            }
-            Event::MainEventsCleared => {
-                // Always request redraw to keep stars animating
-                self.window.request_redraw();
-            }
-            _ => {}
+        let move_amount = self.ship.speed * dt;
+
+        if self.pressed_keys.contains(&VirtualKeyCode::Left) {
+            self.ship.x -= move_amount;
         }
+        if self.pressed_keys.contains(&VirtualKeyCode::Right) {
+            self.ship.x += move_amount;
+        }
+        if self.pressed_keys.contains(&VirtualKeyCode::Up) {
+            self.ship.y -= move_amount;
+        }
+        if self.pressed_keys.contains(&VirtualKeyCode::Down) {
+            self.ship.y += move_amount;
+        }
+
+        // Clamp using current window and ship dimensions
+        self.ship.x = self
+            .ship
+            .x
+            .clamp(0.0, (self.size.width.saturating_sub(self.ship_w)) as f32);
+        self.ship.y = self
+            .ship
+            .y
+            .clamp(0.0, (self.size.height.saturating_sub(self.ship_h)) as f32);
     }
 
-    fn on_redraw(&mut self) {
-        // Update stars (falling)
-        stars::update_stars(&mut self.stars, &mut self.rng, self.size);
+    fn draw(&mut self) {
+        let frame = self.pixels.frame_mut();
 
-        // Apply movement based on keys held down
-        let moved = self.apply_movement(15u32);
-        if moved {
-            // request another redraw for continuous movement
-            self.window.request_redraw();
-        }
+        // Optimized screen clear
+        frame.fill(0);
 
-        // Acquire a mutable frame buffer
-        let frame_immutable = self.pixels.frame();
-        let frame_len = frame_immutable.len();
-        let frame = unsafe {
-            std::slice::from_raw_parts_mut(frame_immutable.as_ptr() as *mut u8, frame_len)
-        };
-
-        // Clear to black (interstellar space)
-        for pixel in frame.chunks_exact_mut(4) {
-            pixel.copy_from_slice(&[0, 0, 0, 255]);
-        }
-
-        // Draw stars
         for star in &self.stars {
             draw_star(frame, self.size.width, star);
         }
 
-        // Draw ship sprite centered on ship logical position
-        let sx = self.ship.x as i32;
-        let sy = self.ship.y as i32;
         draw_sprite(
             frame,
             self.size.width,
-            sx,
-            sy,
+            self.ship.x as i32,
+            self.ship.y as i32,
             &self.ship_pixels,
             self.ship_w,
             self.ship_h,
         );
 
-        if self.pixels.render().is_err() {
-            // On render failure, just exit the event loop on next opportunity
-            // (can't return an error from this callback).
+        if let Err(err) = self.pixels.render() {
+            eprintln!("Pixels render error: {}", err);
         }
     }
 
-    fn on_window_event(&mut self, event: WindowEvent, control_flow: &mut ControlFlow) {
+    fn handle_window_event(&mut self, event: WindowEvent, control_flow: &mut ControlFlow) {
         match event {
             WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
             WindowEvent::KeyboardInput { input, .. } => {
-                self.update_pressed_keys(&input);
-                if input.state == ElementState::Pressed {
-                    if let Some(VirtualKeyCode::Escape) = input.virtual_keycode {
-                        *control_flow = ControlFlow::Exit;
+                if let Some(key) = input.virtual_keycode {
+                    match input.state {
+                        ElementState::Pressed => {
+                            self.pressed_keys.insert(key);
+                            if key == VirtualKeyCode::Escape {
+                                *control_flow = ControlFlow::Exit;
+                            }
+                        }
+                        ElementState::Released => {
+                            self.pressed_keys.remove(&key);
+                        }
                     }
                 }
             }
             WindowEvent::Resized(new_size) => {
                 self.size = new_size;
-                let _ = self.pixels.resize_surface(self.size.width, self.size.height);
-                self.ship.x = self.ship.x.min(self.size.width.saturating_sub(self.ship.size));
-                self.ship.y = self.ship.y.min(self.size.height.saturating_sub(self.ship.size));
+                let _ = self
+                    .pixels
+                    .resize_surface(self.size.width, self.size.height);
             }
             WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
                 self.size = *new_inner_size;
-                let _ = self.pixels.resize_surface(self.size.width, self.size.height);
-                self.ship.x = self.ship.x.min(self.size.width.saturating_sub(self.ship.size));
-                self.ship.y = self.ship.y.min(self.size.height.saturating_sub(self.ship.size));
+                let _ = self
+                    .pixels
+                    .resize_surface(self.size.width, self.size.height);
             }
             _ => {}
         }
-    }
-
-    fn update_pressed_keys(&mut self, input: &winit::event::KeyboardInput) {
-        match (input.virtual_keycode, input.state) {
-            (Some(key), ElementState::Pressed) => {
-                self.pressed_keys.insert(key);
-            }
-            (Some(key), ElementState::Released) => {
-                self.pressed_keys.remove(&key);
-            }
-            _ => {}
-        }
-    }
-
-    fn apply_movement(&mut self, step: u32) -> bool {
-        let mut moved = false;
-        if self.pressed_keys.contains(&VirtualKeyCode::Left) {
-            self.ship.x = self.ship.x.saturating_sub(step);
-            moved = true;
-        }
-        if self.pressed_keys.contains(&VirtualKeyCode::Right) {
-            self.ship.x = (self.ship.x + step).min(self.size.width.saturating_sub(self.ship.size));
-            moved = true;
-        }
-        if self.pressed_keys.contains(&VirtualKeyCode::Up) {
-            self.ship.y = self.ship.y.saturating_sub(step);
-            moved = true;
-        }
-        if self.pressed_keys.contains(&VirtualKeyCode::Down) {
-            self.ship.y = (self.ship.y + step).min(self.size.height.saturating_sub(self.ship.size));
-            moved = true;
-        }
-        moved
     }
 }
 
 fn try_set_fullscreen(event_loop: &EventLoop<()>, window: &Window) {
     if let Some(primary_monitor) = event_loop.primary_monitor() {
-        if let Some(vm) = primary_monitor
+        let video_mode = primary_monitor
             .video_modes()
-            .find(|vm| vm.size().width == WIDTH && vm.size().height == HEIGHT)
-        {
-            window.set_fullscreen(Some(Fullscreen::Exclusive(vm)));
-        } else {
-            window.set_fullscreen(Some(Fullscreen::Borderless(Some(primary_monitor))));
+            .find(|vm| vm.size().width == WIDTH && vm.size().height == HEIGHT);
+
+        match video_mode {
+            Some(vm) => window.set_fullscreen(Some(Fullscreen::Exclusive(vm))),
+            None => window.set_fullscreen(Some(Fullscreen::Borderless(Some(primary_monitor)))),
         }
     }
 }
