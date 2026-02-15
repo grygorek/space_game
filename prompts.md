@@ -83,4 +83,6 @@ I asked Gemini to generate a laser beam. It looked good. I removed background an
 
 Prompt: Improve performance. Improve ship clipping at bottom of the screen.
 
+It was still choppy. By telling what is going on it finally improved to the acceptable level.
+
 --------------------------------
