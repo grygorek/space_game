@@ -494,15 +494,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "experiments"
-version = "0.1.0"
-dependencies = [
- "image",
- "pixels",
- "winit",
-]
-
-[[package]]
 name = "exr"
 version = "1.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1448,6 +1439,15 @@ dependencies = [
  "wayland-client",
  "wayland-cursor",
  "wayland-protocols",
+]
+
+[[package]]
+name = "space_game"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "pixels",
+ "winit",
 ]
 
 [[package]]
