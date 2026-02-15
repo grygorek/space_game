@@ -87,11 +87,18 @@ It was still choppy. By telling it what is going on, it finally improved to the 
 
 --------------------------------
 
-Prompt: Performance is looking good now.
-There is a file beam.png in png directory. Can you use it to generate my spaceship to shoot a laser beam?
-I want one shot per one space press. Autofire will be a future bonus. Ignore the bonus now.
-
 Prompt: Wait. I can see there were no optimizations done in drawing.rs. Can you optimize it?
 
 --------------------------------
 
+Prompt: Performance is looking good now.
+There is a file beam.png in png directory. Can you use it to generate my spaceship to shoot a laser beam?
+I want one shot per one space press. Autofire will be a future bonus. Ignore the bonus now.
+
+Prompt: Generate an image of an enemy ship. View from top, ship pointing 'south', transparent background.
+
+Google Gemini. As usual, edit in Gimp, remove background, crop and resize.
+
+Prompt: Remove mouse cursor and place my spaceship (the one I control) at 1/5th of the screen at bottom, instead of centre as is now.
+
+--------------------------------

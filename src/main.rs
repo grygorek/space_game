@@ -46,7 +46,7 @@ fn main() -> Result<(), Error> {
 struct Beam {
     x: u32,
     y: i32,
-    remain_y: f32, // Accumulator for smooth vertical movement
+    remain_y: f32,
 }
 
 struct Ship {
@@ -65,7 +65,6 @@ struct App {
     pressed_keys: HashSet<VirtualKeyCode>,
     stars: Vec<Star>,
     rng: SimpleRng,
-    // Sprites
     ship_pixels: Vec<u8>,
     ship_w: u32,
     ship_h: u32,
@@ -83,27 +82,30 @@ impl App {
             .build(event_loop)
             .unwrap();
 
+        // CHANGE 1: Hide the mouse cursor
+        window.set_cursor_visible(false);
+
         try_set_fullscreen(event_loop, &window);
 
         let size = window.inner_size();
         let surface_texture = SurfaceTexture::new(size.width, size.height, &window);
         let pixels = Pixels::new(size.width, size.height, surface_texture)?;
 
-        // Load Ship
         let ship_img = image::load_from_memory(SHIP_PNG)
             .expect("Failed to load ship.png")
             .to_rgba8();
         let (ship_w, ship_h) = (ship_img.width(), ship_img.height());
 
-        // Load Beam
         let beam_img = image::load_from_memory(BEAM_PNG)
             .expect("Failed to load beam.png")
             .to_rgba8();
         let (beam_w, beam_h) = (beam_img.width(), beam_img.height());
 
+        // CHANGE 2: Position ship at 1/5th from bottom
+        // Center X, and Y = 80% down the screen
         let ship = Ship {
-            x: size.width / 2,
-            y: size.height - 150, // Start near the bottom
+            x: (size.width / 2).saturating_sub(ship_w / 2),
+            y: size.height - (size.height / 5),
             speed: 500.0,
             remain_x: 0.0,
             remain_y: 0.0,
@@ -131,10 +133,8 @@ impl App {
     }
 
     fn update(&mut self, dt: f32) {
-        // 1. Update stars
         stars::update_stars(&mut self.stars, &mut self.rng, self.size, dt);
 
-        // 2. Update ship movement (Integer + Accumulator)
         let mut move_x = 0.0;
         let mut move_y = 0.0;
         let speed_this_frame = self.ship.speed * dt;
@@ -168,7 +168,6 @@ impl App {
         self.ship.remain_x -= dx as f32;
         self.ship.remain_y -= dy as f32;
 
-        // 3. Update beam movement
         let beam_speed = 900.0;
         for beam in self.beams.iter_mut() {
             beam.remain_y -= beam_speed * dt;
@@ -177,7 +176,6 @@ impl App {
             beam.remain_y -= b_dy as f32;
         }
 
-        // 4. Cull beams that left the screen
         self.beams.retain(|b| b.y + (self.beam_h as i32) > 0);
     }
 
@@ -185,7 +183,6 @@ impl App {
         let frame = self.pixels.frame_mut();
         frame.fill(0);
 
-        // Layers: Stars -> Beams -> Ship
         for star in &self.stars {
             draw_star(frame, self.size.width, star);
         }
@@ -222,13 +219,11 @@ impl App {
                 if let Some(key) = input.virtual_keycode {
                     match input.state {
                         ElementState::Pressed => {
-                            // Check for single-press Space fire
                             if key == VirtualKeyCode::Space
                                 && !self.pressed_keys.contains(&VirtualKeyCode::Space)
                             {
                                 self.fire_beam();
                             }
-
                             self.pressed_keys.insert(key);
                             if key == VirtualKeyCode::Escape {
                                 *control_flow = ControlFlow::Exit;
@@ -251,7 +246,6 @@ impl App {
     }
 
     fn fire_beam(&mut self) {
-        // Center the beam horizontally based on the ship's position
         let spawn_x = self.ship.x + (self.ship_w / 2) - (self.beam_w / 2);
         let spawn_y = self.ship.y as i32 - (self.beam_h as i32);
 
