@@ -83,6 +83,10 @@ I asked Gemini to generate a laser beam. It looked good. I removed background an
 
 Prompt: Improve performance. Improve ship clipping at bottom of the screen.
 
-It was still choppy. By telling what is going on it finally improved to the acceptable level.
+It was still choppy. By telling it what is going on, it finally improved to the acceptable level.
 
 --------------------------------
+
+Prompt: Performance is looking good now.
+There is a file beam.png in png directory. Can you use it to generate my spaceship to shoot a laser beam?
+I want one shot per one space press. Autofire will be a future bonus. Ignore the bonus now.

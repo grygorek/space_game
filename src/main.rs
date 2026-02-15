@@ -17,6 +17,7 @@ const WIDTH: u32 = 1920;
 const HEIGHT: u32 = 1080;
 
 static SHIP_PNG: &[u8] = include_bytes!("../png/ship.png");
+static BEAM_PNG: &[u8] = include_bytes!("../png/beam.png");
 
 fn main() -> Result<(), Error> {
     let event_loop = EventLoop::new();
@@ -42,11 +43,17 @@ fn main() -> Result<(), Error> {
     });
 }
 
+struct Beam {
+    x: u32,
+    y: i32,
+    remain_y: f32, // Accumulator for smooth vertical movement
+}
+
 struct Ship {
     x: u32,
     y: u32,
     speed: f32,
-    remain_x: f32, // Fractional movement storage
+    remain_x: f32,
     remain_y: f32,
 }
 
@@ -58,15 +65,20 @@ struct App {
     pressed_keys: HashSet<VirtualKeyCode>,
     stars: Vec<Star>,
     rng: SimpleRng,
+    // Sprites
     ship_pixels: Vec<u8>,
     ship_w: u32,
     ship_h: u32,
+    beams: Vec<Beam>,
+    beam_pixels: Vec<u8>,
+    beam_w: u32,
+    beam_h: u32,
 }
 
 impl App {
     fn new(event_loop: &EventLoop<()>) -> Result<Self, Error> {
         let window = WindowBuilder::new()
-            .with_title("Fixed Pixel Starship")
+            .with_title("Starship Command")
             .with_inner_size(PhysicalSize::new(WIDTH, HEIGHT))
             .build(event_loop)
             .unwrap();
@@ -77,16 +89,22 @@ impl App {
         let surface_texture = SurfaceTexture::new(size.width, size.height, &window);
         let pixels = Pixels::new(size.width, size.height, surface_texture)?;
 
-        let img = image::load_from_memory(SHIP_PNG)
+        // Load Ship
+        let ship_img = image::load_from_memory(SHIP_PNG)
             .expect("Failed to load ship.png")
             .to_rgba8();
-        let ship_w = img.width();
-        let ship_h = img.height();
+        let (ship_w, ship_h) = (ship_img.width(), ship_img.height());
+
+        // Load Beam
+        let beam_img = image::load_from_memory(BEAM_PNG)
+            .expect("Failed to load beam.png")
+            .to_rgba8();
+        let (beam_w, beam_h) = (beam_img.width(), beam_img.height());
 
         let ship = Ship {
             x: size.width / 2,
-            y: size.height / 2,
-            speed: 400.0,
+            y: size.height - 150, // Start near the bottom
+            speed: 500.0,
             remain_x: 0.0,
             remain_y: 0.0,
         };
@@ -102,15 +120,21 @@ impl App {
             pressed_keys: HashSet::new(),
             stars,
             rng,
+            ship_pixels: ship_img.into_raw(),
             ship_w,
             ship_h,
-            ship_pixels: img.into_raw(),
+            beams: Vec::new(),
+            beam_pixels: beam_img.into_raw(),
+            beam_w,
+            beam_h,
         })
     }
 
     fn update(&mut self, dt: f32) {
+        // 1. Update stars
         stars::update_stars(&mut self.stars, &mut self.rng, self.size, dt);
 
+        // 2. Update ship movement (Integer + Accumulator)
         let mut move_x = 0.0;
         let mut move_y = 0.0;
         let speed_this_frame = self.ship.speed * dt;
@@ -128,34 +152,54 @@ impl App {
             move_y += speed_this_frame;
         }
 
-        // 1. Add fractional movement to accumulator
         self.ship.remain_x += move_x;
         self.ship.remain_y += move_y;
 
-        // 2. Determine whole pixel steps
         let dx = self.ship.remain_x as i32;
         let dy = self.ship.remain_y as i32;
 
-        // 3. Update integer position with bounds checking
-        let new_x = (self.ship.x as i32 + dx)
-            .clamp(0, (self.size.width.saturating_sub(self.ship_w)) as i32);
-        let new_y = (self.ship.y as i32 + dy)
-            .clamp(0, (self.size.height.saturating_sub(self.ship_h)) as i32);
+        self.ship.x = (self.ship.x as i32 + dx)
+            .clamp(0, (self.size.width.saturating_sub(self.ship_w)) as i32)
+            as u32;
+        self.ship.y = (self.ship.y as i32 + dy)
+            .clamp(0, (self.size.height.saturating_sub(self.ship_h)) as i32)
+            as u32;
 
-        self.ship.x = new_x as u32;
-        self.ship.y = new_y as u32;
-
-        // 4. Subtract used pixels from accumulator
         self.ship.remain_x -= dx as f32;
         self.ship.remain_y -= dy as f32;
+
+        // 3. Update beam movement
+        let beam_speed = 900.0;
+        for beam in self.beams.iter_mut() {
+            beam.remain_y -= beam_speed * dt;
+            let b_dy = beam.remain_y as i32;
+            beam.y += b_dy;
+            beam.remain_y -= b_dy as f32;
+        }
+
+        // 4. Cull beams that left the screen
+        self.beams.retain(|b| b.y + (self.beam_h as i32) > 0);
     }
 
     fn draw(&mut self) {
         let frame = self.pixels.frame_mut();
         frame.fill(0);
 
+        // Layers: Stars -> Beams -> Ship
         for star in &self.stars {
             draw_star(frame, self.size.width, star);
+        }
+
+        for beam in &self.beams {
+            draw_sprite(
+                frame,
+                self.size.width,
+                beam.x as i32,
+                beam.y,
+                &self.beam_pixels,
+                self.beam_w,
+                self.beam_h,
+            );
         }
 
         draw_sprite(
@@ -178,6 +222,13 @@ impl App {
                 if let Some(key) = input.virtual_keycode {
                     match input.state {
                         ElementState::Pressed => {
+                            // Check for single-press Space fire
+                            if key == VirtualKeyCode::Space
+                                && !self.pressed_keys.contains(&VirtualKeyCode::Space)
+                            {
+                                self.fire_beam();
+                            }
+
                             self.pressed_keys.insert(key);
                             if key == VirtualKeyCode::Escape {
                                 *control_flow = ControlFlow::Exit;
@@ -197,6 +248,18 @@ impl App {
             }
             _ => {}
         }
+    }
+
+    fn fire_beam(&mut self) {
+        // Center the beam horizontally based on the ship's position
+        let spawn_x = self.ship.x + (self.ship_w / 2) - (self.beam_w / 2);
+        let spawn_y = self.ship.y as i32 - (self.beam_h as i32);
+
+        self.beams.push(Beam {
+            x: spawn_x,
+            y: spawn_y,
+            remain_y: 0.0,
+        });
     }
 }
 
