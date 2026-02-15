@@ -108,3 +108,10 @@ Prompt: Using enemy1.png file, show 3 rows, 8 ships in each row. Keep about half
 Prompt: My program has 3 files: main.rs, drawing.rs and stars.rs. I can see functions like try_set_fullscreen handle_event and few others in main.rs which are more like application environment control functions. Then update and draw handle game. I think main.rs deserves to break on few files. What would you suggest?
 
 As a result app.rs, entities.rs, input.rs were added.
+
+--------------------------------
+
+Prompt: Please generate collision logic for my beams to hit enemies.
+
+Prompt: Add Explosion particle effect at enemy's location when the enemy is destroyed.
+

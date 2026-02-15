@@ -1,5 +1,5 @@
 use crate::drawing::draw_sprite;
-use crate::entities::{Beam, Enemy, Ship};
+use crate::entities::{Beam, Enemy, Particle, Ship};
 use crate::input::InputState;
 use crate::stars::{draw_star, generate_stars, update_stars, SimpleRng, Star};
 use pixels::{Pixels, SurfaceTexture};
@@ -7,7 +7,6 @@ use winit::dpi::PhysicalSize;
 use winit::event::VirtualKeyCode;
 use winit::window::Window;
 
-// Static assets
 static SHIP_PNG: &[u8] = include_bytes!("../png/ship.png");
 static BEAM_PNG: &[u8] = include_bytes!("../png/beam.png");
 static ENEMY1_PNG: &[u8] = include_bytes!("../png/enemy1.png");
@@ -20,8 +19,8 @@ pub struct App {
     ship: Ship,
     enemies: Vec<Enemy>,
     stars: Vec<Star>,
+    particles: Vec<Particle>, // New particle container
     rng: SimpleRng,
-    // Sprite Data
     ship_pixels: Vec<u8>,
     ship_w: u32,
     ship_h: u32,
@@ -51,7 +50,6 @@ impl App {
         let mut rng = SimpleRng::seed_from_instant();
         let stars = generate_stars(&mut rng, size);
 
-        // Position Player at 1/5th from bottom
         let ship = Ship {
             x: (size.width / 2) - (ship_w / 2),
             y: size.height - (size.height / 5),
@@ -60,7 +58,6 @@ impl App {
             remain_y: 0.0,
         };
 
-        // Generate Enemy Grid: 3 rows, 8 columns
         let rows = 3;
         let cols = 8;
         let spacing_x = enemy_w / 2;
@@ -87,6 +84,7 @@ impl App {
             ship,
             enemies,
             stars,
+            particles: Vec::new(),
             rng,
             ship_pixels: ship_img.into_raw(),
             ship_w,
@@ -102,15 +100,13 @@ impl App {
     }
 
     pub fn update(&mut self, dt: f32) {
-        // 1. Update Background
         update_stars(&mut self.stars, &mut self.rng, self.size, dt);
 
-        // 2. Process Input
         if self.input.was_key_pressed(VirtualKeyCode::Space) {
             self.fire_beam();
         }
 
-        // 3. Handle Ship Movement
+        // Ship movement
         let mut mx = 0.0;
         let mut my = 0.0;
         if self.input.is_key_down(VirtualKeyCode::Left) {
@@ -135,11 +131,18 @@ impl App {
             (self.ship.x as i32 + dx).clamp(0, (self.size.width - self.ship_w) as i32) as u32;
         self.ship.y =
             (self.ship.y as i32 + dy).clamp(0, (self.size.height - self.ship_h) as i32) as u32;
-
         self.ship.remain_x -= dx as f32;
         self.ship.remain_y -= dy as f32;
 
-        // 4. Update Beams
+        // Particles physics
+        for p in self.particles.iter_mut() {
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            p.life -= dt;
+        }
+        self.particles.retain(|p| p.life > 0.0);
+
+        // Beam movement
         for beam in self.beams.iter_mut() {
             beam.remain_y -= 1000.0 * dt;
             let bdy = beam.remain_y as i32;
@@ -147,12 +150,8 @@ impl App {
             beam.remain_y -= bdy as f32;
         }
 
-        // 5. Check for hits
         self.check_collisions();
-
-        // 6. Cleanup (Remove off-screen beams or beams that hit enemies)
         self.beams.retain(|b| b.y + (self.beam_h as i32) > 0);
-
         self.input.clear_just_pressed();
     }
 
@@ -160,12 +159,10 @@ impl App {
         let frame = self.pixels.frame_mut();
         frame.fill(0);
 
-        // Layer 1: Stars
         for s in &self.stars {
             draw_star(frame, self.size.width, s);
         }
 
-        // Layer 2: Enemies
         for e in &self.enemies {
             if e.active {
                 draw_sprite(
@@ -180,7 +177,24 @@ impl App {
             }
         }
 
-        // Layer 3: Beams
+        // Draw individual pixel particles
+        for p in &self.particles {
+            if p.x >= 0.0
+                && p.x < self.size.width as f32
+                && p.y >= 0.0
+                && p.y < self.size.height as f32
+            {
+                let idx = (p.y as u32 * self.size.width + p.x as u32) as usize * 4;
+                if idx + 3 < frame.len() {
+                    // Flash yellow/orange based on remaining life
+                    frame[idx] = 255;
+                    frame[idx + 1] = (150.0 + (p.life * 200.0)).min(255.0) as u8;
+                    frame[idx + 2] = 50;
+                    frame[idx + 3] = 255;
+                }
+            }
+        }
+
         for b in &self.beams {
             draw_sprite(
                 frame,
@@ -193,7 +207,6 @@ impl App {
             );
         }
 
-        // Layer 4: Player Ship
         draw_sprite(
             frame,
             self.size.width,
@@ -215,9 +228,28 @@ impl App {
         });
     }
 
+    fn spawn_explosion(&mut self, x: u32, y: u32) {
+        let count = 30;
+        for _ in 0..count {
+            // Random circle distribution
+            let angle = (self.rng.next_u32() % 360) as f32 * (std::f32::consts::PI / 180.0);
+            let speed = (self.rng.next_u32() % 200) as f32 + 50.0;
+
+            self.particles.push(Particle {
+                x: x as f32 + (self.enemy_w / 2) as f32,
+                y: y as f32 + (self.enemy_h / 2) as f32,
+                vx: angle.cos() * speed,
+                vy: angle.sin() * speed,
+                life: 0.4 + (self.rng.next_u32() % 300) as f32 / 1000.0,
+            });
+        }
+    }
+
     fn check_collisions(&mut self) {
+        // 1. Create a temporary list to store where explosions should happen
+        let mut explosions_to_spawn = Vec::new();
+
         for beam in self.beams.iter_mut() {
-            // If beam already hit something and was moved to cull zone, skip
             if beam.y < 0 {
                 continue;
             }
@@ -227,7 +259,6 @@ impl App {
                     continue;
                 }
 
-                // AABB Overlap check
                 let beam_hit = beam.x < enemy.x + self.enemy_w
                     && beam.x + self.beam_w > enemy.x
                     && beam.y < (enemy.y + self.enemy_h) as i32
@@ -235,10 +266,19 @@ impl App {
 
                 if beam_hit {
                     enemy.active = false;
-                    beam.y = -1000; // Flag for removal
-                    break; // Beam is spent
+                    beam.y = -1000;
+
+                    // 2. Record the location instead of calling self.spawn_explosion
+                    explosions_to_spawn.push((enemy.x, enemy.y));
+
+                    break;
                 }
             }
+        }
+
+        // 3. Now that the mutable borrow of self.beams is over, we can safely use self again
+        for (x, y) in explosions_to_spawn {
+            self.spawn_explosion(x, y);
         }
     }
 }
