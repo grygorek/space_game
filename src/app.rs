@@ -7,7 +7,7 @@ use winit::dpi::PhysicalSize;
 use winit::event::VirtualKeyCode;
 use winit::window::Window;
 
-// Static assets moved here
+// Static assets
 static SHIP_PNG: &[u8] = include_bytes!("../png/ship.png");
 static BEAM_PNG: &[u8] = include_bytes!("../png/beam.png");
 static ENEMY1_PNG: &[u8] = include_bytes!("../png/enemy1.png");
@@ -21,7 +21,7 @@ pub struct App {
     enemies: Vec<Enemy>,
     stars: Vec<Star>,
     rng: SimpleRng,
-    // Pixel Data
+    // Sprite Data
     ship_pixels: Vec<u8>,
     ship_w: u32,
     ship_h: u32,
@@ -51,7 +51,7 @@ impl App {
         let mut rng = SimpleRng::seed_from_instant();
         let stars = generate_stars(&mut rng, size);
 
-        // Initial Entities
+        // Position Player at 1/5th from bottom
         let ship = Ship {
             x: (size.width / 2) - (ship_w / 2),
             y: size.height - (size.height / 5),
@@ -60,16 +60,20 @@ impl App {
             remain_y: 0.0,
         };
 
+        // Generate Enemy Grid: 3 rows, 8 columns
         let rows = 3;
         let cols = 8;
+        let spacing_x = enemy_w / 2;
+        let spacing_y = enemy_h / 2;
+        let grid_width = (cols as u32 * enemy_w) + ((cols as u32 - 1) * spacing_x);
+        let start_x = (size.width.saturating_sub(grid_width)) / 2;
+
         let mut enemies = Vec::with_capacity(rows * cols);
-        let start_x =
-            (size.width - ((cols as u32 * enemy_w) + (cols as u32 - 1) * (enemy_w / 2))) / 2;
         for r in 0..rows {
             for c in 0..cols {
                 enemies.push(Enemy {
-                    x: start_x + (c as u32 * (enemy_w + enemy_w / 2)),
-                    y: (size.height / 3) + (r as u32 * (enemy_h + enemy_h / 2)),
+                    x: start_x + (c as u32 * (enemy_w + spacing_x)),
+                    y: (size.height / 3) + (r as u32 * (enemy_h + spacing_y)),
                     active: true,
                 });
             }
@@ -98,13 +102,15 @@ impl App {
     }
 
     pub fn update(&mut self, dt: f32) {
+        // 1. Update Background
         update_stars(&mut self.stars, &mut self.rng, self.size, dt);
 
+        // 2. Process Input
         if self.input.was_key_pressed(VirtualKeyCode::Space) {
             self.fire_beam();
         }
 
-        // Handle ship movement
+        // 3. Handle Ship Movement
         let mut mx = 0.0;
         let mut my = 0.0;
         if self.input.is_key_down(VirtualKeyCode::Left) {
@@ -124,29 +130,42 @@ impl App {
         self.ship.remain_y += my;
         let dx = self.ship.remain_x as i32;
         let dy = self.ship.remain_y as i32;
+
         self.ship.x =
             (self.ship.x as i32 + dx).clamp(0, (self.size.width - self.ship_w) as i32) as u32;
         self.ship.y =
             (self.ship.y as i32 + dy).clamp(0, (self.size.height - self.ship_h) as i32) as u32;
+
         self.ship.remain_x -= dx as f32;
         self.ship.remain_y -= dy as f32;
 
+        // 4. Update Beams
         for beam in self.beams.iter_mut() {
             beam.remain_y -= 1000.0 * dt;
             let bdy = beam.remain_y as i32;
             beam.y += bdy;
             beam.remain_y -= bdy as f32;
         }
+
+        // 5. Check for hits
+        self.check_collisions();
+
+        // 6. Cleanup (Remove off-screen beams or beams that hit enemies)
         self.beams.retain(|b| b.y + (self.beam_h as i32) > 0);
+
         self.input.clear_just_pressed();
     }
 
     pub fn draw(&mut self) {
         let frame = self.pixels.frame_mut();
         frame.fill(0);
+
+        // Layer 1: Stars
         for s in &self.stars {
             draw_star(frame, self.size.width, s);
         }
+
+        // Layer 2: Enemies
         for e in &self.enemies {
             if e.active {
                 draw_sprite(
@@ -160,6 +179,8 @@ impl App {
                 );
             }
         }
+
+        // Layer 3: Beams
         for b in &self.beams {
             draw_sprite(
                 frame,
@@ -171,6 +192,8 @@ impl App {
                 self.beam_h,
             );
         }
+
+        // Layer 4: Player Ship
         draw_sprite(
             frame,
             self.size.width,
@@ -180,6 +203,7 @@ impl App {
             self.ship_w,
             self.ship_h,
         );
+
         self.pixels.render().unwrap();
     }
 
@@ -189,5 +213,32 @@ impl App {
             y: self.ship.y as i32 - self.beam_h as i32,
             remain_y: 0.0,
         });
+    }
+
+    fn check_collisions(&mut self) {
+        for beam in self.beams.iter_mut() {
+            // If beam already hit something and was moved to cull zone, skip
+            if beam.y < 0 {
+                continue;
+            }
+
+            for enemy in self.enemies.iter_mut() {
+                if !enemy.active {
+                    continue;
+                }
+
+                // AABB Overlap check
+                let beam_hit = beam.x < enemy.x + self.enemy_w
+                    && beam.x + self.beam_w > enemy.x
+                    && beam.y < (enemy.y + self.enemy_h) as i32
+                    && beam.y + self.beam_h as i32 > enemy.y as i32;
+
+                if beam_hit {
+                    enemy.active = false;
+                    beam.y = -1000; // Flag for removal
+                    break; // Beam is spent
+                }
+            }
+        }
     }
 }
