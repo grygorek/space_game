@@ -102,3 +102,5 @@ Google Gemini. As usual, edit in Gimp, remove background, crop and resize.
 Prompt: Remove mouse cursor and place my spaceship (the one I control) at 1/5th of the screen at bottom, instead of centre as is now.
 
 --------------------------------
+
+Prompt: Using enemy1.png file, show 3 rows, 8 ships in each row. Keep about half of the ship width distance between them.

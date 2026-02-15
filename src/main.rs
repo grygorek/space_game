@@ -18,6 +18,7 @@ const HEIGHT: u32 = 1080;
 
 static SHIP_PNG: &[u8] = include_bytes!("../png/ship.png");
 static BEAM_PNG: &[u8] = include_bytes!("../png/beam.png");
+static ENEMY1_PNG: &[u8] = include_bytes!("../png/enemy1.png");
 
 fn main() -> Result<(), Error> {
     let event_loop = EventLoop::new();
@@ -57,17 +58,28 @@ struct Ship {
     remain_y: f32,
 }
 
+struct Enemy {
+    x: u32,
+    y: u32,
+    active: bool,
+}
+
 struct App {
     window: Window,
     pixels: Pixels,
     size: PhysicalSize<u32>,
     ship: Ship,
+    enemies: Vec<Enemy>,
     pressed_keys: HashSet<VirtualKeyCode>,
     stars: Vec<Star>,
     rng: SimpleRng,
+    // Sprites
     ship_pixels: Vec<u8>,
     ship_w: u32,
     ship_h: u32,
+    enemy_pixels: Vec<u8>,
+    enemy_w: u32,
+    enemy_h: u32,
     beams: Vec<Beam>,
     beam_pixels: Vec<u8>,
     beam_w: u32,
@@ -82,34 +94,58 @@ impl App {
             .build(event_loop)
             .unwrap();
 
-        // CHANGE 1: Hide the mouse cursor
         window.set_cursor_visible(false);
-
         try_set_fullscreen(event_loop, &window);
 
         let size = window.inner_size();
         let surface_texture = SurfaceTexture::new(size.width, size.height, &window);
         let pixels = Pixels::new(size.width, size.height, surface_texture)?;
 
+        // Load Sprites
         let ship_img = image::load_from_memory(SHIP_PNG)
-            .expect("Failed to load ship.png")
+            .expect("ship.png fail")
             .to_rgba8();
-        let (ship_w, ship_h) = (ship_img.width(), ship_img.height());
-
         let beam_img = image::load_from_memory(BEAM_PNG)
-            .expect("Failed to load beam.png")
+            .expect("beam.png fail")
             .to_rgba8();
-        let (beam_w, beam_h) = (beam_img.width(), beam_img.height());
+        let enemy_img = image::load_from_memory(ENEMY1_PNG)
+            .expect("enemy1.png fail")
+            .to_rgba8();
 
-        // CHANGE 2: Position ship at 1/5th from bottom
-        // Center X, and Y = 80% down the screen
+        let (ship_w, ship_h) = (ship_img.width(), ship_img.height());
+        let (beam_w, beam_h) = (beam_img.width(), beam_img.height());
+        let (enemy_w, enemy_h) = (enemy_img.width(), enemy_img.height());
+
+        // Player Ship: 1/5th from bottom
         let ship = Ship {
             x: (size.width / 2).saturating_sub(ship_w / 2),
             y: size.height - (size.height / 5),
-            speed: 500.0,
+            speed: 600.0,
             remain_x: 0.0,
             remain_y: 0.0,
         };
+
+        // Enemy Grid: 3 rows, 8 columns
+        // Use usize for counts to satisfy Vec::with_capacity and iterators
+        let rows: usize = 3;
+        let cols: usize = 8;
+        let spacing_x = enemy_w / 2;
+        let spacing_y = enemy_h / 2;
+
+        let grid_width = (cols as u32 * enemy_w) + ((cols as u32 - 1) * spacing_x);
+        let start_x = (size.width.saturating_sub(grid_width)) / 2;
+        let start_y = size.height / 3;
+
+        let mut enemies = Vec::with_capacity(rows * cols);
+        for r in 0..rows {
+            for c in 0..cols {
+                enemies.push(Enemy {
+                    x: start_x + (c as u32 * (enemy_w + spacing_x)),
+                    y: start_y + (r as u32 * (enemy_h + spacing_y)),
+                    active: true,
+                });
+            }
+        }
 
         let mut rng = SimpleRng::seed_from_instant();
         let stars = generate_stars(&mut rng, size);
@@ -119,12 +155,16 @@ impl App {
             pixels,
             size,
             ship,
+            enemies,
             pressed_keys: HashSet::new(),
             stars,
             rng,
             ship_pixels: ship_img.into_raw(),
             ship_w,
             ship_h,
+            enemy_pixels: enemy_img.into_raw(),
+            enemy_w,
+            enemy_h,
             beams: Vec::new(),
             beam_pixels: beam_img.into_raw(),
             beam_w,
@@ -135,26 +175,25 @@ impl App {
     fn update(&mut self, dt: f32) {
         stars::update_stars(&mut self.stars, &mut self.rng, self.size, dt);
 
+        // Ship movement
         let mut move_x = 0.0;
         let mut move_y = 0.0;
-        let speed_this_frame = self.ship.speed * dt;
-
+        let speed = self.ship.speed * dt;
         if self.pressed_keys.contains(&VirtualKeyCode::Left) {
-            move_x -= speed_this_frame;
+            move_x -= speed;
         }
         if self.pressed_keys.contains(&VirtualKeyCode::Right) {
-            move_x += speed_this_frame;
+            move_x += speed;
         }
         if self.pressed_keys.contains(&VirtualKeyCode::Up) {
-            move_y -= speed_this_frame;
+            move_y -= speed;
         }
         if self.pressed_keys.contains(&VirtualKeyCode::Down) {
-            move_y += speed_this_frame;
+            move_y += speed;
         }
 
         self.ship.remain_x += move_x;
         self.ship.remain_y += move_y;
-
         let dx = self.ship.remain_x as i32;
         let dy = self.ship.remain_y as i32;
 
@@ -168,14 +207,14 @@ impl App {
         self.ship.remain_x -= dx as f32;
         self.ship.remain_y -= dy as f32;
 
-        let beam_speed = 900.0;
+        // Beams movement
+        let beam_speed = 1000.0;
         for beam in self.beams.iter_mut() {
             beam.remain_y -= beam_speed * dt;
             let b_dy = beam.remain_y as i32;
             beam.y += b_dy;
             beam.remain_y -= b_dy as f32;
         }
-
         self.beams.retain(|b| b.y + (self.beam_h as i32) > 0);
     }
 
@@ -183,10 +222,27 @@ impl App {
         let frame = self.pixels.frame_mut();
         frame.fill(0);
 
+        // 1. Background
         for star in &self.stars {
             draw_star(frame, self.size.width, star);
         }
 
+        // 2. Enemies
+        for enemy in &self.enemies {
+            if enemy.active {
+                draw_sprite(
+                    frame,
+                    self.size.width,
+                    enemy.x as i32,
+                    enemy.y as i32,
+                    &self.enemy_pixels,
+                    self.enemy_w,
+                    self.enemy_h,
+                );
+            }
+        }
+
+        // 3. Projectiles
         for beam in &self.beams {
             draw_sprite(
                 frame,
@@ -199,6 +255,7 @@ impl App {
             );
         }
 
+        // 4. Player
         draw_sprite(
             frame,
             self.size.width,
@@ -248,7 +305,6 @@ impl App {
     fn fire_beam(&mut self) {
         let spawn_x = self.ship.x + (self.ship_w / 2) - (self.beam_w / 2);
         let spawn_y = self.ship.y as i32 - (self.beam_h as i32);
-
         self.beams.push(Beam {
             x: spawn_x,
             y: spawn_y,
