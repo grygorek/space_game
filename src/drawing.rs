@@ -1,82 +1,55 @@
-// Utilities for drawing pixels and sprites (alpha blending)
-
-/// Set pixel without blending (overwrite)
-pub fn set_pixel(frame: &mut [u8], frame_width: u32, x: u32, y: u32, color: [u8; 4]) {
-    let idx = ((y * frame_width + x) * 4) as usize;
-    if idx + 3 < frame.len() {
-        frame[idx..idx + 4].copy_from_slice(&color);
+pub fn set_pixel(frame: &mut [u8], width: u32, x: u32, y: u32, color: [u8; 4]) {
+    let index = ((y * width + x) * 4) as usize;
+    if index + 4 <= frame.len() {
+        // Using copy_from_slice is often faster than 4 manual assignments
+        frame[index..index + 4].copy_from_slice(&color);
     }
 }
 
-/// Blend src RGBA over destination pixel at (x,y) in frame.
-pub fn blend_pixel(frame: &mut [u8], frame_width: u32, x: u32, y: u32, src: [u8; 4]) {
-    let idx = ((y * frame_width + x) * 4) as usize;
-    if idx + 3 >= frame.len() {
-        return;
-    }
-    let dst_r = frame[idx] as f32;
-    let dst_g = frame[idx + 1] as f32;
-    let dst_b = frame[idx + 2] as f32;
-    let dst_a = frame[idx + 3] as f32 / 255.0;
-
-    let src_r = src[0] as f32;
-    let src_g = src[1] as f32;
-    let src_b = src[2] as f32;
-    let src_a = src[3] as f32 / 255.0;
-
-    let out_a = src_a + dst_a * (1.0 - src_a);
-    if out_a <= 0.0 {
-        frame[idx] = 0;
-        frame[idx + 1] = 0;
-        frame[idx + 2] = 0;
-        frame[idx + 3] = 0;
-        return;
-    }
-
-    let out_r = (src_r * src_a + dst_r * dst_a * (1.0 - src_a)) / out_a;
-    let out_g = (src_g * src_a + dst_g * dst_a * (1.0 - src_a)) / out_a;
-    let out_b = (src_b * src_a + dst_b * dst_a * (1.0 - src_a)) / out_a;
-
-    frame[idx] = out_r as u8;
-    frame[idx + 1] = out_g as u8;
-    frame[idx + 2] = out_b as u8;
-    frame[idx + 3] = (out_a * 255.0) as u8;
-}
-
-/// Draw a sprite (RGBA8) at top-left position (dst_x, dst_y).
-/// Coordinates are allowed to be negative to support partial offscreen rendering.
 pub fn draw_sprite(
     frame: &mut [u8],
     frame_width: u32,
-    dst_x: i32,
-    dst_y: i32,
+    dest_x: i32,
+    dest_y: i32,
     sprite_pixels: &[u8],
     sprite_w: u32,
     sprite_h: u32,
 ) {
-    for yy in 0..(sprite_h as i32) {
-        for xx in 0..(sprite_w as i32) {
-            let px = dst_x + xx;
-            let py = dst_y + yy;
-            if px < 0 || py < 0 {
+    for row in 0..sprite_h {
+        for col in 0..sprite_w {
+            let tx = dest_x + col as i32;
+            let ty = dest_y + row as i32;
+
+            // 1. Boundary Check (Early Exit)
+            if tx < 0 || tx >= frame_width as i32 || ty < 0 || ty >= 1080 {
                 continue;
             }
-            let pxu = px as u32;
-            let pyu = py as u32;
-            // check bounds
-            // Note: we can't access frame size here, so the caller must ensure bounds or pass frame size separately.
-            // We'll assume caller checks bounds against frame size before calling, or the blend_pixel will check.
-            let sidx = ((yy as u32 * sprite_w + xx as u32) * 4) as usize;
-            if sidx + 3 >= sprite_pixels.len() {
+
+            let src_idx = ((row * sprite_w + col) * 4) as usize;
+            let src_alpha = sprite_pixels[src_idx + 3];
+
+            // 2. Optimization: Skip fully transparent pixels
+            if src_alpha == 0 {
                 continue;
             }
-            let src = [
-                sprite_pixels[sidx],
-                sprite_pixels[sidx + 1],
-                sprite_pixels[sidx + 2],
-                sprite_pixels[sidx + 3],
-            ];
-            blend_pixel(frame, frame_width, pxu, pyu, src);
+
+            let dst_idx = ((ty * frame_width as i32 + tx) * 4) as usize;
+
+            // 3. Optimization: Skip blending for fully opaque pixels
+            if src_alpha == 255 {
+                frame[dst_idx..dst_idx + 4].copy_from_slice(&sprite_pixels[src_idx..src_idx + 4]);
+            } else {
+                // 4. Fast Alpha Blending (using bit-shifting instead of division)
+                // (source * alpha + destination * (255 - alpha)) / 256
+                for i in 0..3 {
+                    let src = sprite_pixels[src_idx + i] as u32;
+                    let dst = frame[dst_idx + i] as u32;
+                    let alpha = src_alpha as u32;
+
+                    frame[dst_idx + i] = ((src * alpha + dst * (255 - alpha)) >> 8) as u8;
+                }
+                frame[dst_idx + 3] = 255; // Keep the screen opaque
+            }
         }
     }
 }
