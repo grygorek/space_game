@@ -120,3 +120,5 @@ Prompt: Add Explosion particle effect at enemy's location when the enemy is dest
 Prompt: I updated the game in the background quiet significantly. Added enemies, laser beams and explosions. My program is written in visual studio as a cargo solution. The output program name is still 'experiments. Can you rename it to 'space_game'? Is it OK to change the 'experiments' directory name too.
 
 --------------------------------
+
+Prompt: The enemy ships are too tight, spread them wider

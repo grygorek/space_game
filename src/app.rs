@@ -19,7 +19,7 @@ pub struct App {
     ship: Ship,
     enemies: Vec<Enemy>,
     stars: Vec<Star>,
-    particles: Vec<Particle>, // New particle container
+    particles: Vec<Particle>,
     rng: SimpleRng,
     ship_pixels: Vec<u8>,
     ship_w: u32,
@@ -58,19 +58,22 @@ impl App {
             remain_y: 0.0,
         };
 
-        let rows = 3;
-        let cols = 8;
-        let spacing_x = enemy_w / 2;
-        let spacing_y = enemy_h / 2;
+        // Spacing Logic: 1.2x width/height for a cleaner, wider spread
+        let rows: usize = 3;
+        let cols: usize = 8;
+        let spacing_x = (enemy_w as f32 * 1.2) as u32;
+        let spacing_y = (enemy_h as f32 * 1.2) as u32;
+
         let grid_width = (cols as u32 * enemy_w) + ((cols as u32 - 1) * spacing_x);
         let start_x = (size.width.saturating_sub(grid_width)) / 2;
+        let start_y = size.height / 3;
 
         let mut enemies = Vec::with_capacity(rows * cols);
         for r in 0..rows {
             for c in 0..cols {
                 enemies.push(Enemy {
                     x: start_x + (c as u32 * (enemy_w + spacing_x)),
-                    y: (size.height / 3) + (r as u32 * (enemy_h + spacing_y)),
+                    y: start_y + (r as u32 * (enemy_h + spacing_y)),
                     active: true,
                 });
             }
@@ -134,7 +137,7 @@ impl App {
         self.ship.remain_x -= dx as f32;
         self.ship.remain_y -= dy as f32;
 
-        // Particles physics
+        // Particle physics
         for p in self.particles.iter_mut() {
             p.x += p.vx * dt;
             p.y += p.vy * dt;
@@ -177,7 +180,6 @@ impl App {
             }
         }
 
-        // Draw individual pixel particles
         for p in &self.particles {
             if p.x >= 0.0
                 && p.x < self.size.width as f32
@@ -186,7 +188,6 @@ impl App {
             {
                 let idx = (p.y as u32 * self.size.width + p.x as u32) as usize * 4;
                 if idx + 3 < frame.len() {
-                    // Flash yellow/orange based on remaining life
                     frame[idx] = 255;
                     frame[idx + 1] = (150.0 + (p.life * 200.0)).min(255.0) as u8;
                     frame[idx + 2] = 50;
@@ -231,7 +232,6 @@ impl App {
     fn spawn_explosion(&mut self, x: u32, y: u32) {
         let count = 30;
         for _ in 0..count {
-            // Random circle distribution
             let angle = (self.rng.next_u32() % 360) as f32 * (std::f32::consts::PI / 180.0);
             let speed = (self.rng.next_u32() % 200) as f32 + 50.0;
 
@@ -246,8 +246,8 @@ impl App {
     }
 
     fn check_collisions(&mut self) {
-        // 1. Create a temporary list to store where explosions should happen
-        let mut explosions_to_spawn = Vec::new();
+        // Collect explosion positions in a temporary vector to avoid double-borrowing self
+        let mut hits = Vec::new();
 
         for beam in self.beams.iter_mut() {
             if beam.y < 0 {
@@ -267,18 +267,15 @@ impl App {
                 if beam_hit {
                     enemy.active = false;
                     beam.y = -1000;
-
-                    // 2. Record the location instead of calling self.spawn_explosion
-                    explosions_to_spawn.push((enemy.x, enemy.y));
-
+                    hits.push((enemy.x, enemy.y));
                     break;
                 }
             }
         }
 
-        // 3. Now that the mutable borrow of self.beams is over, we can safely use self again
-        for (x, y) in explosions_to_spawn {
-            self.spawn_explosion(x, y);
+        // Now we can safely borrow self again to spawn particles
+        for (hx, hy) in hits {
+            self.spawn_explosion(hx, hy);
         }
     }
 }
