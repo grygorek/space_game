@@ -122,3 +122,19 @@ Prompt: I updated the game in the background quiet significantly. Added enemies,
 --------------------------------
 
 Prompt: The enemy ships are too tight, spread them wider
+
+--------------------------------
+
+Prompt: Functions 'draw', 'update' and 'new' became little bit a spaghetti. Can you extract handling of different objects to dedicated functions? Also ship data could be grouped in a single struct. Would that be good for performance (cache) or better to keep separate?
+
+It grouped logic data and drawing together.
+
+Prompt: Performance. Code updates all first and draws later. Would it be better to keep drawing data of all objects together and the drawing data also togheter and connect them by an index?
+
+Correctly detected DOD pattern.
+
+Prompt: Apply data oriented pattern with separated logic data and separate drawing data. Also apply SOLID principles. But not all. Just single responsibility and interface segregation.
+
+It did big refactoring but it build was broken, full screen resolution was lost and mouse cursor was back. But providing errors and asking to fix as it was, it got all back working.
+
+--------------------------------

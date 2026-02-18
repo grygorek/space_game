@@ -1,7 +1,7 @@
 use crate::drawing::set_pixel;
 use winit::dpi::PhysicalSize;
 
-pub const MAX_STARS: usize = 120; // Adjusted for a good balance of density and performance
+pub const MAX_STARS: usize = 120;
 
 #[derive(Clone)]
 pub struct Star {
@@ -12,13 +12,8 @@ pub struct Star {
 }
 
 impl Star {
-    /// Creates a new star.
-    /// If start_anywhere is true, it populates the initial screen.
-    /// If false, it spawns just above the top for a continuous flow.
     pub fn new_random(rng: &mut SimpleRng, width: u32, height: u32, start_anywhere: bool) -> Self {
-        // Diameter between 1 and 4 pixels
         let diameter = (rng.next_u32() % 4) + 1;
-
         let x = (rng.next_u32() % width) as f32;
         let y = if start_anywhere {
             (rng.next_u32() % height) as f32
@@ -28,12 +23,11 @@ impl Star {
 
         let alpha = 100 + (rng.next_u32() % 156) as u8;
 
-        // Color variation: Bigger stars are slightly warmer/brighter
         let color = match diameter {
-            1 => [150, 150, 220, alpha], // Small: Dim Blue
-            2 => [200, 200, 255, alpha], // Medium-Small: Soft Blue
-            3 => [255, 255, 255, alpha], // Medium-Large: Pure White
-            _ => [255, 240, 150, alpha], // Large: Yellowish
+            1 => [150, 150, 220, alpha],
+            2 => [200, 200, 255, alpha],
+            3 => [255, 255, 255, alpha],
+            _ => [255, 240, 150, alpha],
         };
 
         Star {
@@ -45,7 +39,6 @@ impl Star {
     }
 }
 
-/// Populates the initial vector of stars
 pub fn generate_stars(rng: &mut SimpleRng, size: PhysicalSize<u32>) -> Vec<Star> {
     let mut stars = Vec::with_capacity(MAX_STARS);
     for _ in 0..MAX_STARS {
@@ -54,39 +47,32 @@ pub fn generate_stars(rng: &mut SimpleRng, size: PhysicalSize<u32>) -> Vec<Star>
     stars
 }
 
-/// Move stars down based on their size (Parallax effect)
 pub fn update_stars(stars: &mut [Star], rng: &mut SimpleRng, size: PhysicalSize<u32>, dt: f32) {
     for star in stars.iter_mut() {
-        // Speed scaling: Larger stars move faster to create depth
         let speed = (star.diameter as f32) * 60.0;
         star.y += speed * dt;
 
-        // If the star moves off the bottom, respawn it at the top
         if star.y > size.height as f32 {
             *star = Star::new_random(rng, size.width, size.height, false);
         }
     }
 }
 
-/// Renders the star to the pixel buffer
-pub fn draw_star(frame: &mut [u8], frame_width: u32, star: &Star) {
+pub fn draw_star(frame: &mut [u8], frame_width: u32, frame_height: u32, star: &Star) {
     let cx = star.x as u32;
     let cy = star.y as u32;
     let d = star.diameter;
 
-    // Boundary check for the starting corner
-    if cx >= frame_width || cy >= 1080 {
+    if cx >= frame_width || cy >= frame_height {
         return;
     }
 
-    // Draw a square based on diameter
     for dy in 0..d {
         for dx in 0..d {
             let px = cx + dx;
             let py = cy + dy;
 
-            // Per-pixel bounds check to prevent memory errors
-            if px < frame_width && py < 1080 {
+            if px < frame_width && py < frame_height {
                 set_pixel(frame, frame_width, px, py, star.color);
             }
         }
@@ -95,6 +81,7 @@ pub fn draw_star(frame: &mut [u8], frame_width: u32, star: &Star) {
 
 // --- Utility: Xorshift Random Number Generator ---
 
+#[derive(Clone, Copy)]
 pub struct SimpleRng(u64);
 
 impl SimpleRng {
@@ -103,12 +90,15 @@ impl SimpleRng {
             Ok(dur) => dur.as_nanos() as u64,
             Err(_) => 0u64,
         };
-        // Add a large constant to ensure seed isn't 0
         SimpleRng(seed.wrapping_add(0x9E3779B97F4A7C15))
     }
 
     pub fn next_u64(&mut self) -> u64 {
         let mut x = self.0;
+        // Ensure x is never 0 for Xorshift
+        if x == 0 {
+            x = 0x9E3779B97F4A7C15;
+        }
         x ^= x << 13;
         x ^= x >> 7;
         x ^= x << 17;

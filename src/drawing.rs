@@ -9,6 +9,7 @@ pub fn set_pixel(frame: &mut [u8], width: u32, x: u32, y: u32, color: [u8; 4]) {
 pub fn draw_sprite(
     frame: &mut [u8],
     frame_width: u32,
+    frame_height: u32,
     dest_x: i32,
     dest_y: i32,
     sprite_pixels: &[u8],
@@ -21,7 +22,7 @@ pub fn draw_sprite(
             let ty = dest_y + row as i32;
 
             // 1. Boundary Check (Early Exit)
-            if tx < 0 || tx >= frame_width as i32 || ty < 0 || ty >= 1080 {
+            if tx < 0 || tx >= frame_width as i32 || ty < 0 || ty >= frame_height as i32 {
                 continue;
             }
 
@@ -34,6 +35,11 @@ pub fn draw_sprite(
             }
 
             let dst_idx = ((ty * frame_width as i32 + tx) * 4) as usize;
+
+            // Defensive check to ensure we don't write out of bounds
+            if dst_idx + 4 > frame.len() {
+                continue;
+            }
 
             // 3. Optimization: Skip blending for fully opaque pixels
             if src_alpha == 255 {
