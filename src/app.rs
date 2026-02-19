@@ -3,6 +3,8 @@ use crate::entities::{
     beam::Beam, enemy::Enemy, particle::Particle, ship::Ship, Collidable, Sprite,
 };
 use crate::wave::Wave;
+use rodio::{Decoder, OutputStream, OutputStreamHandle, Source};
+use std::io::Cursor;
 
 use crate::input::InputState;
 use crate::stars::{draw_star, generate_stars, update_stars, SimpleRng, Star};
@@ -15,6 +17,8 @@ use winit::window::Window;
 static SHIP_PNG: &[u8] = include_bytes!("../png/ship.png");
 static BEAM_PNG: &[u8] = include_bytes!("../png/beam.png");
 static ENEMY1_PNG: &[u8] = include_bytes!("../png/enemy1.png");
+static SFX_SHOT: &[u8] = include_bytes!("../sfx/laser1.wav");
+static SFX_EXPLOSION: &[u8] = include_bytes!("../sfx/explosion.wav");
 
 pub struct App {
     pub window: Window,
@@ -31,6 +35,14 @@ pub struct App {
     stars: Vec<Star>,
     rng: SimpleRng,
     sprites: Vec<Sprite>,
+
+    // Audio handle must stay alive for the duration of the app
+    _stream: OutputStream,
+    stream_handle: OutputStreamHandle,
+
+    // We store the raw bytes of the sounds to "play" them instantly
+    sfx_shot: &'static [u8],
+    sfx_explosion: &'static [u8],
 }
 
 impl App {
@@ -64,6 +76,8 @@ impl App {
         let mut wave = Wave::new();
         let stars = generate_stars(&mut rng, size);
 
+        let (stream, stream_handle) = OutputStream::try_default().unwrap();
+
         Self {
             window,
             pixels,
@@ -77,6 +91,10 @@ impl App {
             beams: Vec::new(),
             particles: Vec::new(),
             stars,
+            _stream: stream,
+            stream_handle,
+            sfx_shot: SFX_SHOT,
+            sfx_explosion: SFX_EXPLOSION,
         }
     }
 
@@ -167,53 +185,52 @@ impl App {
     }
 
     fn process_collisions(&mut self) {
-        // 1. Copy the sprite dimensions out into local variables.
-        // This breaks the link to `self.sprites` so we can use `self` later.
         let (s_w, s_h) = (self.sprites[0].width, self.sprites[0].height);
-        let (_b_w, _b_h) = (self.sprites[1].width, self.sprites[1].height);
         let (e_w, e_h) = (self.sprites[2].width, self.sprites[2].height);
 
-        // We still need the actual Sprite objects for the collision trait,
-        // but we'll fetch them inside the loops or use temporary references.
+        // 1. Create a flag to check if we need to play an explosion sound
+        let mut play_explosion = false;
+        let mut beam_explosions = Vec::new();
 
         // 2. BEAMS vs ENEMIES
-        let mut beam_explosions = Vec::new();
         for beam in self.beams.iter_mut() {
             for enemy in self.enemies.iter_mut().filter(|e| e.active) {
-                // Note: We use the local copies of sprites here if needed,
-                // or just re-reference self.sprites momentarily.
                 if beam.collides_with(enemy, &self.sprites[1], &self.sprites[2]) {
                     enemy.active = false;
                     beam.y = -1000;
                     beam_explosions.push((enemy.x + e_w / 2, enemy.y + e_h / 2));
+                    play_explosion = true; // Mark that a sound is needed
                     break;
                 }
             }
-        }
-
-        // Now we can safely call spawn_explosion because the loops above finished
-        for (hx, hy) in beam_explosions {
-            self.spawn_explosion(hx, hy);
         }
 
         // 3. ENEMIES vs PLAYER
         if self.ship.active {
-            let mut player_died = false;
-            let (sx, sy) = (self.ship.x, self.ship.y); // Copy ship pos
+            let mut player_hit = false;
+            let (sx, sy) = (self.ship.x, self.ship.y);
 
             for enemy in self.enemies.iter().filter(|e| e.active) {
-                // Check collision using the references only for the duration of this call
                 if enemy.collides_with(&self.ship, &self.sprites[2], &self.sprites[0]) {
-                    player_died = true;
+                    player_hit = true;
                     break;
                 }
             }
 
-            if player_died {
+            if player_hit {
                 self.ship.active = false;
                 self.spawn_explosion(sx + s_w / 2, sy + s_h / 2);
-                println!("GAME OVER");
+                self.play_sfx(self.sfx_explosion); // This is safe here because the loop is finished
             }
+        }
+
+        // 4. Finalize: Spawn particle explosions and play sounds
+        for (hx, hy) in beam_explosions {
+            self.spawn_explosion(hx, hy);
+        }
+
+        if play_explosion {
+            self.play_sfx(self.sfx_explosion);
         }
     }
 
@@ -303,6 +320,8 @@ impl App {
             remain_y: 0.0,
             sprite_idx: 1,
         });
+
+        self.play_sfx(self.sfx_shot);
     }
 
     fn spawn_explosion(&mut self, x: u32, y: u32) {
@@ -336,5 +355,12 @@ impl App {
         self.particles.clear();
 
         println!("GAME RESTARTED");
+    }
+
+    fn play_sfx(&self, data: &'static [u8]) {
+        let cursor = Cursor::new(data);
+        let source = Decoder::new(cursor).unwrap();
+        // Use play_raw to avoid creating a new Sink every time
+        let _ = self.stream_handle.play_raw(source.convert_samples());
     }
 }

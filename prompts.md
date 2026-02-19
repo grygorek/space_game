@@ -146,3 +146,7 @@ Prompt: Make the ships in the array move like in Space Invaders
 Prompt: Make my ship explode when it colides with an enemy ship
 
 Prompt: Render GAME OVER text in the center when player dies
+
+Prompt: Add beam laser sound and ship explosion.
+
+Downloaded waves from: https://opengameart.org/
