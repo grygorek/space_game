@@ -138,3 +138,5 @@ Prompt: Apply data oriented pattern with separated logic data and separate drawi
 It did big refactoring but it build was broken, full screen resolution was lost and mouse cursor was back. But providing errors and asking to fix as it was, it got all back working.
 
 --------------------------------
+
+Prompt: The array of enemies is the first wave. Once player destroys all the ships in the wave, next a wave will come. Add to the code handling multiple waves. For now only one (array) wave. Possibly split to another file it if makes sense.

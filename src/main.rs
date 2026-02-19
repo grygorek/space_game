@@ -3,6 +3,7 @@ pub mod drawing;
 pub mod entities;
 pub mod input;
 pub mod stars;
+pub mod wave;
 
 use app::App;
 use winit::dpi::{LogicalSize, PhysicalSize};

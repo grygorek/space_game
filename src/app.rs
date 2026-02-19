@@ -2,6 +2,7 @@ use crate::drawing::draw_sprite;
 use crate::entities::{
     beam::Beam, enemy::Enemy, particle::Particle, ship::Ship, Collidable, Sprite,
 };
+use crate::wave::Wave;
 
 use crate::input::InputState;
 use crate::stars::{draw_star, generate_stars, update_stars, SimpleRng, Star};
@@ -24,6 +25,7 @@ pub struct App {
     // Entities
     ship: Ship,
     enemies: Vec<Enemy>,
+    wave: Wave,
     beams: Vec<Beam>,
     particles: Vec<Particle>,
     stars: Vec<Star>,
@@ -58,27 +60,7 @@ impl App {
             sprite_idx: 0,
         };
 
-        // Initialize Enemies Grid
-        let e_s = &sprites[2];
-        let cols = 8;
-        let rows = 3;
-        let gap_x = (e_s.width as f32 * 1.5) as u32;
-        let gap_y = (e_s.height as f32 * 1.5) as u32;
-        let grid_w = (cols as u32 * e_s.width) + ((cols - 1) as u32 * gap_x);
-        let start_x = (size.width.saturating_sub(grid_w)) / 2;
-
-        let mut enemies = Vec::with_capacity(rows * cols);
-        for r in 0..rows {
-            for c in 0..cols {
-                enemies.push(Enemy {
-                    x: start_x + (c as u32 * (e_s.width + gap_x)),
-                    y: (size.height / 4) + (r as u32 * (e_s.height + gap_y)),
-                    active: true,
-                    sprite_idx: 2,
-                });
-            }
-        }
-
+        let mut wave = Wave::new();
         let stars = generate_stars(&mut rng, size);
 
         Self {
@@ -88,7 +70,8 @@ impl App {
             rng,
             input: InputState::new(),
             ship,
-            enemies,
+            enemies: wave.deploy(size.width, size.height, &sprites[2]),
+            wave,
             sprites,
             beams: Vec::new(),
             particles: Vec::new(),
@@ -110,6 +93,13 @@ impl App {
         self.update_beams(dt);
         self.update_particles(dt);
         self.process_collisions();
+
+        // When the current squad is extinct, deploy the next wave
+        if self.wave.is_extinct(&self.enemies) {
+            self.enemies = self
+                .wave
+                .deploy(self.size.width, self.size.height, &self.sprites[2]);
+        }
 
         self.input.clear_just_pressed();
     }
