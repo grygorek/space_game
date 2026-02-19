@@ -90,6 +90,7 @@ impl App {
             self.fire_beam();
         }
 
+        self.update_enemies(dt);
         self.update_beams(dt);
         self.update_particles(dt);
         self.process_collisions();
@@ -102,6 +103,39 @@ impl App {
         }
 
         self.input.clear_just_pressed();
+    }
+
+    fn update_enemies(&mut self, dt: f32) {
+        let mut hit_edge = false;
+        let margin = 20;
+        let enemy_sprite_w = self.sprites[2].width;
+
+        // Calculate speed scaling: Faster as more enemies die
+        let alive_count = self.enemies.iter().filter(|e| e.active).count();
+        let total_count = self.enemies.len();
+        // Speed up to 3x original speed as the last enemy remains
+        let speed_factor = 1.0 + (1.0 - (alive_count as f32 / total_count as f32)) * 2.0;
+        let current_speed = self.wave.move_speed * speed_factor * self.wave.direction;
+
+        // Horizontal Move & Edge Detection
+        for enemy in self.enemies.iter_mut().filter(|e| e.active) {
+            enemy.x = (enemy.x as f32 + current_speed * dt) as u32;
+
+            if (enemy.x <= margin && self.wave.direction < 0.0)
+                || (enemy.x + enemy_sprite_w >= self.size.width - margin
+                    && self.wave.direction > 0.0)
+            {
+                hit_edge = true;
+            }
+        }
+
+        // Direction Flip and Vertical Drop
+        if hit_edge {
+            self.wave.direction *= -1.0;
+            for enemy in self.enemies.iter_mut() {
+                enemy.y += self.wave.drop_distance as u32;
+            }
+        }
     }
 
     fn update_beams(&mut self, dt: f32) {

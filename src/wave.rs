@@ -3,11 +3,19 @@ use crate::entities::Sprite;
 
 pub struct Wave {
     pub count: u32,
+    pub direction: f32, // 1.0 for right, -1.0 for left
+    pub move_speed: f32,
+    pub drop_distance: i32,
 }
 
 impl Wave {
     pub fn new() -> Self {
-        Self { count: 0 }
+        Self {
+            count: 0,
+            direction: 1.0,
+            move_speed: 100.0,
+            drop_distance: 20,
+        }
     }
 
     pub fn deploy(
@@ -17,8 +25,11 @@ impl Wave {
         enemy_sprite: &Sprite,
     ) -> Vec<Enemy> {
         self.count += 1;
+        self.direction = 1.0; // Reset direction for new wave
 
-        // Pattern logic: 8 columns, rows grow with wave count
+        // Base speed increases with each wave
+        self.move_speed = 100.0 + (self.count as f32 * 20.0);
+
         let cols = 8;
         let rows = (2 + self.count).min(6);
 
@@ -33,7 +44,7 @@ impl Wave {
             for c in 0..cols {
                 enemies.push(Enemy {
                     x: start_x + (c * (enemy_sprite.width + gap_x)),
-                    y: (screen_height / 6) + (r * (enemy_sprite.height + gap_y)),
+                    y: (screen_height / 8) + (r * (enemy_sprite.height + gap_y)),
                     active: true,
                     sprite_idx: 2,
                 });
