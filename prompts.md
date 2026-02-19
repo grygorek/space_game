@@ -142,3 +142,5 @@ It did big refactoring but it build was broken, full screen resolution was lost 
 Prompt: The array of enemies is the first wave. Once player destroys all the ships in the wave, next a wave will come. Add to the code handling multiple waves. For now only one (array) wave. Possibly split to another file it if makes sense.
 
 Prompt: Make the ships in the array move like in Space Invaders
+
+Prompt: Make my ship explode when it colides with an enemy ship

@@ -58,6 +58,7 @@ impl App {
             remain_x: 0.0,
             remain_y: 0.0,
             sprite_idx: 0,
+            active: true,
         };
 
         let mut wave = Wave::new();
@@ -80,22 +81,29 @@ impl App {
     }
 
     pub fn update(&mut self, dt: f32) {
+        if self.input.was_key_pressed(VirtualKeyCode::R) {
+            self.reset();
+            return;
+        }
+
         update_stars(&mut self.stars, &mut self.rng, self.size, dt);
 
-        let s_img = &self.sprites[self.ship.sprite_idx];
-        self.ship
-            .update(&self.input, self.size, s_img.width, s_img.height, dt);
+        if self.ship.is_active() {
+            let s_img = &self.sprites[self.ship.sprite_idx];
+            self.ship
+                .update(&self.input, self.size, s_img.width, s_img.height, dt);
 
-        if self.input.was_key_pressed(VirtualKeyCode::Space) {
-            self.fire_beam();
+            if self.input.was_key_pressed(VirtualKeyCode::Space) {
+                self.fire_beam();
+            }
         }
 
         self.update_enemies(dt);
         self.update_beams(dt);
         self.update_particles(dt);
+
         self.process_collisions();
 
-        // When the current squad is extinct, deploy the next wave
         if self.wave.is_extinct(&self.enemies) {
             self.enemies = self
                 .wave
@@ -159,27 +167,53 @@ impl App {
     }
 
     fn process_collisions(&mut self) {
-        let mut explosions = Vec::new();
-        let b_s = &self.sprites[1];
-        let e_s = &self.sprites[2];
+        // 1. Copy the sprite dimensions out into local variables.
+        // This breaks the link to `self.sprites` so we can use `self` later.
+        let (s_w, s_h) = (self.sprites[0].width, self.sprites[0].height);
+        let (_b_w, _b_h) = (self.sprites[1].width, self.sprites[1].height);
+        let (e_w, e_h) = (self.sprites[2].width, self.sprites[2].height);
 
-        for beam in self.beams.iter_mut().filter(|b| b.y >= 0) {
-            for enemy in self.enemies.iter_mut().filter(|e| e.is_active()) {
-                let (ex, ey) = enemy.pos();
-                if beam.x < ex + e_s.width
-                    && beam.x + b_s.width > ex
-                    && beam.y < ey + e_s.height as i32
-                    && beam.y + b_s.height as i32 > ey
-                {
-                    enemy.set_active(false);
+        // We still need the actual Sprite objects for the collision trait,
+        // but we'll fetch them inside the loops or use temporary references.
+
+        // 2. BEAMS vs ENEMIES
+        let mut beam_explosions = Vec::new();
+        for beam in self.beams.iter_mut() {
+            for enemy in self.enemies.iter_mut().filter(|e| e.active) {
+                // Note: We use the local copies of sprites here if needed,
+                // or just re-reference self.sprites momentarily.
+                if beam.collides_with(enemy, &self.sprites[1], &self.sprites[2]) {
+                    enemy.active = false;
                     beam.y = -1000;
-                    explosions.push((ex + e_s.width / 2, ey as u32 + e_s.height / 2));
+                    beam_explosions.push((enemy.x + e_w / 2, enemy.y + e_h / 2));
                     break;
                 }
             }
         }
-        for (hx, hy) in explosions {
+
+        // Now we can safely call spawn_explosion because the loops above finished
+        for (hx, hy) in beam_explosions {
             self.spawn_explosion(hx, hy);
+        }
+
+        // 3. ENEMIES vs PLAYER
+        if self.ship.active {
+            let mut player_died = false;
+            let (sx, sy) = (self.ship.x, self.ship.y); // Copy ship pos
+
+            for enemy in self.enemies.iter().filter(|e| e.active) {
+                // Check collision using the references only for the duration of this call
+                if enemy.collides_with(&self.ship, &self.sprites[2], &self.sprites[0]) {
+                    player_died = true;
+                    break;
+                }
+            }
+
+            if player_died {
+                self.ship.active = false;
+                self.spawn_explosion(sx + s_w / 2, sy + s_h / 2);
+                println!("GAME OVER");
+            }
         }
     }
 
@@ -194,20 +228,22 @@ impl App {
         }
 
         Self::draw_enemies(frame, width, height, &self.enemies, &self.sprites[2]);
-        Self::draw_particles(frame, width, height, &self.particles);
         Self::draw_beams(frame, width, height, &self.beams, &self.sprites[1]);
+        Self::draw_particles(frame, width, height, &self.particles);
 
-        let s = &self.sprites[self.ship.sprite_idx];
-        draw_sprite(
-            frame,
-            width,
-            height,
-            self.ship.x as i32,
-            self.ship.y as i32,
-            &s.pixels,
-            s.width,
-            s.height,
-        );
+        if self.ship.is_active() {
+            let s = &self.sprites[self.ship.sprite_idx];
+            draw_sprite(
+                frame,
+                width,
+                height,
+                self.ship.x as i32,
+                self.ship.y as i32,
+                &s.pixels,
+                s.width,
+                s.height,
+            );
+        }
 
         self.pixels.render().unwrap();
     }
@@ -279,5 +315,24 @@ impl App {
                 life: 0.4 + (self.rng.next_u32() % 300) as f32 / 1000.0,
             });
         }
+    }
+
+    pub fn reset(&mut self) {
+        // 1. Reset the Ship
+        self.ship.active = true;
+        self.ship.x = (self.size.width / 2) - (self.sprites[0].width / 2);
+        self.ship.y = self.size.height - (self.size.height / 5);
+
+        // 2. Reset the Wave and Enemies
+        self.wave = crate::wave::Wave::new(); // Starts at wave 0
+        self.enemies = self
+            .wave
+            .deploy(self.size.width, self.size.height, &self.sprites[2]);
+
+        // 3. Clear the projectiles and particles
+        self.beams.clear();
+        self.particles.clear();
+
+        println!("GAME RESTARTED");
     }
 }
