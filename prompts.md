@@ -144,3 +144,5 @@ Prompt: The array of enemies is the first wave. Once player destroys all the shi
 Prompt: Make the ships in the array move like in Space Invaders
 
 Prompt: Make my ship explode when it colides with an enemy ship
+
+Prompt: Render GAME OVER text in the center when player dies

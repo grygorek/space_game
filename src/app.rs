@@ -243,6 +243,8 @@ impl App {
                 s.width,
                 s.height,
             );
+        } else {
+            crate::drawing::draw_text_centered(frame, width, height, 10);
         }
 
         self.pixels.render().unwrap();

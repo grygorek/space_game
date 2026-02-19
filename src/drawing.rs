@@ -59,3 +59,46 @@ pub fn draw_sprite(
         }
     }
 }
+
+// Simple 8x8 bitmapped letters (1 = pixel, 0 = empty)
+const FONT_G: [u8; 8] = [0x3C, 0x42, 0x40, 0x5E, 0x42, 0x42, 0x3C, 0x00];
+const FONT_A: [u8; 8] = [0x18, 0x24, 0x42, 0x7E, 0x42, 0x42, 0x42, 0x00];
+const FONT_M: [u8; 8] = [0x42, 0x66, 0x5A, 0x42, 0x42, 0x42, 0x42, 0x00];
+const FONT_E: [u8; 8] = [0x7E, 0x40, 0x40, 0x78, 0x40, 0x40, 0x7E, 0x00];
+const FONT_O: [u8; 8] = [0x3C, 0x42, 0x42, 0x42, 0x42, 0x42, 0x3C, 0x00];
+const FONT_V: [u8; 8] = [0x42, 0x42, 0x42, 0x42, 0x42, 0x24, 0x18, 0x00];
+const FONT_R: [u8; 8] = [0x7C, 0x42, 0x42, 0x7C, 0x48, 0x44, 0x42, 0x00];
+
+pub fn draw_text_centered(frame: &mut [u8], width: u32, height: u32, scale: u32) {
+    let text = [
+        &FONT_G, &FONT_A, &FONT_M, &FONT_E, &FONT_O, &FONT_V, &FONT_E, &FONT_R,
+    ];
+    let char_w = 8 * scale;
+    let total_w = (text.len() as u32 * char_w) + ((text.len() as u32 - 1) * scale);
+    let start_x = (width - total_w) / 2;
+    let start_y = (height - (8 * scale)) / 2;
+
+    for (i, glyph) in text.iter().enumerate() {
+        let x_offset = start_x + (i as u32 * (char_w + scale));
+        for row in 0..8 {
+            for col in 0..8 {
+                if (glyph[row] & (0x80 >> col)) != 0 {
+                    // Draw a scaled "pixel" block
+                    for py in 0..scale {
+                        for px in 0..scale {
+                            let tx = x_offset + (col as u32 * scale) + px;
+                            let ty = start_y + (row as u32 * scale) + py;
+                            let idx = ((ty * width + tx) * 4) as usize;
+                            if idx + 3 < frame.len() {
+                                frame[idx] = 255; // R
+                                frame[idx + 1] = 0; // G
+                                frame[idx + 2] = 0; // B
+                                frame[idx + 3] = 255; // A
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
