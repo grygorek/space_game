@@ -5,6 +5,7 @@ pub struct Wave {
     pub count: u32,
     pub direction: f32, // 1.0 for right, -1.0 for left
     pub move_speed: f32,
+    pub max_speed: f32,
     pub drop_distance: i32,
     pub idle_timer: f32,
 }
@@ -15,6 +16,7 @@ impl Wave {
             count: 0,
             direction: 1.0,
             move_speed: 200.0,
+            max_speed: 800.0,
             drop_distance: 20,
             idle_timer: 0.0,
         }

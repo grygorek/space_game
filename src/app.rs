@@ -136,35 +136,30 @@ impl App {
         let margin = 20;
         let enemy_sprite_w = self.sprites[2].width;
 
-        // 1. Calculate Speed Scaling
         let alive_count = self.enemies.iter().filter(|e| e.active).count();
         let total_count = self.enemies.len();
+        if total_count == 0 {
+            return;
+        }
 
-        // Proportion of enemies killed (0.0 to 1.0)
+        // 1. Calculate Speed & Clamp
         let kill_progress = 1.0 - (alive_count as f32 / total_count as f32);
-
-        // 2. Handle Idle Timeout Speed Boost
         self.wave.idle_timer += dt;
-        // Every 5 seconds of no kills, add a "virtual" 10% progress to speed
         let idle_boost = (self.wave.idle_timer / 5.0).floor() * 0.1;
 
-        // Final speed calculation: Base * (1.0 + progress + idle_boost)
-        let speed_factor = 1.0 + kill_progress + idle_boost;
-        let current_speed = self.wave.move_speed * speed_factor * self.wave.direction;
+        let raw_magnitude = self.wave.move_speed * (1.0 + kill_progress + idle_boost);
+        let clamped_magnitude = raw_magnitude.min(self.wave.max_speed);
+        let current_speed = clamped_magnitude * self.wave.direction;
 
-        // 3. Move horizontally and check edges
+        // 2. Horizontal Movement
         for enemy in self.enemies.iter_mut().filter(|e| e.active) {
-            // Add the movement to the remainder
             enemy.remain_x += current_speed * dt;
-
-            // Calculate how many full pixels we moved
             let move_x = enemy.remain_x as i32;
 
-            // Update position and subtract the "used" pixels from remainder
-            enemy.x = (enemy.x as i32 + move_x).max(0) as u32;
+            let new_x = enemy.x as i32 + move_x;
+            enemy.x = new_x.max(0) as u32;
             enemy.remain_x -= move_x as f32;
 
-            // Edge detection
             if (enemy.x <= margin && self.wave.direction < 0.0)
                 || (enemy.x + enemy_sprite_w >= self.size.width - margin
                     && self.wave.direction > 0.0)
@@ -173,17 +168,16 @@ impl App {
             }
         }
 
-        // 4. Direction Flip and Vertical Drop
+        // 3. Edge Flip & Drop
         if hit_edge {
             self.wave.direction *= -1.0;
             for enemy in self.enemies.iter_mut() {
                 enemy.y += self.wave.drop_distance as u32;
-            }
 
-            // Fix: Force move them away from the edge slightly so they don't get stuck
-            // in a "flip loop" if the frame rate is low
-            for enemy in self.enemies.iter_mut().filter(|e| e.active) {
-                enemy.x = (enemy.x as f32 + (self.wave.direction * 5.0)) as u32;
+                // Small push to prevent getting stuck in the wall
+                let push_offset = (self.wave.direction * 5.0) as i32;
+                enemy.x = (enemy.x as i32 + push_offset).max(0) as u32;
+                enemy.remain_x = 0.0;
             }
         }
     }
@@ -224,6 +218,7 @@ impl App {
                     beam.y = -1000;
                     beam_explosions.push((enemy.x + e_w / 2, enemy.y + e_h / 2));
                     play_explosion = true; // Mark that a sound is needed
+                    self.wave.idle_timer = 0.0;
                     break;
                 }
             }
