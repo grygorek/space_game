@@ -150,3 +150,7 @@ Prompt: Render GAME OVER text in the center when player dies
 Prompt: Add beam laser sound and ship explosion.
 
 Downloaded waves from: https://opengameart.org/
+
+--------------------------------
+
+Prompt: That is OK. I think there is an issue. The initial speed of the wave is little bit too slow. Make it 2x faster. I think that when the wave hits the left or right edge the speed resets. Can you fix it in the way that the speed does not reaset? Also, if player dose not kill any enemy ships, the wave should speed up after some timeout too.

@@ -4,6 +4,7 @@ pub struct Enemy {
     pub x: u32,
     pub y: u32,
     pub active: bool,
+    pub remain_x: f32,
     pub sprite_idx: usize,
 }
 
