@@ -2,7 +2,7 @@ use crate::drawing::draw_sprite;
 use crate::entities::{
     beam::Beam, enemy::Enemy, particle::Particle, ship::Ship, Collidable, Sprite,
 };
-use crate::waves::{WaveType, classic::ClassicWave, swoop::SwoopWave};
+use crate::waves::{classic::ClassicWave, swoop::SwoopWave, WaveType};
 use rodio::{Decoder, OutputStream, OutputStreamHandle, Source};
 use std::io::Cursor;
 
@@ -29,7 +29,7 @@ pub struct App {
     // Entities
     ship: Ship,
     enemies: Vec<Enemy>,
-    current_wave: WaveType, 
+    current_wave: WaveType,
     wave_count: u32,
     beams: Vec<Beam>,
     particles: Vec<Particle>,
@@ -76,7 +76,7 @@ impl App {
         let wave_count = 1;
         let current_wave = WaveType::Classic(ClassicWave::new(wave_count));
         let enemies = current_wave.deploy(size.width);
-        
+
         let stars = generate_stars(&mut rng, size);
         let (stream, stream_handle) = OutputStream::try_default().unwrap();
 
@@ -111,7 +111,8 @@ impl App {
 
         if self.ship.is_active() {
             let s_img = &self.sprites[self.ship.sprite_idx];
-            self.ship.update(&self.input, self.size, s_img.width, s_img.height, dt);
+            self.ship
+                .update(&self.input, self.size, s_img.width, s_img.height, dt);
 
             if self.input.was_key_pressed(VirtualKeyCode::Space) {
                 self.fire_beam();
@@ -133,26 +134,24 @@ impl App {
 
     fn transition_wave(&mut self) {
         self.wave_count += 1;
-        
+
         // Cycle behavior: Every 3rd wave is a Swoop
         self.current_wave = if self.wave_count % 3 == 0 {
             WaveType::Swoop(SwoopWave::new())
         } else {
             WaveType::Classic(ClassicWave::new(self.wave_count))
         };
-        
+
         self.enemies = self.current_wave.deploy(self.size.width);
     }
 
     fn update_enemies(&mut self, dt: f32) {
-        if self.enemies.is_empty() { return; }
+        if self.enemies.is_empty() {
+            return;
+        }
 
-        self.current_wave.update(
-            &mut self.enemies, 
-            dt, 
-            self.size.width, 
-            &self.sprites[2]
-        );
+        self.current_wave
+            .update(&mut self.enemies, dt, self.size.width, &self.sprites[2]);
     }
 
     fn process_collisions(&mut self) {
@@ -194,7 +193,9 @@ impl App {
         for (hx, hy) in beam_explosions {
             self.spawn_explosion(hx, hy);
         }
-        if play_explosion { self.play_sfx(self.sfx_explosion); }
+        if play_explosion {
+            self.play_sfx(self.sfx_explosion);
+        }
     }
 
     pub fn reset(&mut self) {
@@ -223,7 +224,9 @@ impl App {
 
     fn update_particles(&mut self, dt: f32) {
         for p in self.particles.iter_mut() {
-            p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            p.life -= dt;
         }
         self.particles.retain(|p| p.life > 0.0);
     }
@@ -244,7 +247,16 @@ impl App {
 
         if self.ship.is_active() {
             let s = &self.sprites[self.ship.sprite_idx];
-            draw_sprite(frame, width, height, self.ship.x as i32, self.ship.y as i32, &s.pixels, s.width, s.height);
+            draw_sprite(
+                frame,
+                width,
+                height,
+                self.ship.x as i32,
+                self.ship.y as i32,
+                &s.pixels,
+                s.width,
+                s.height,
+            );
         } else {
             crate::drawing::draw_text_centered(frame, width, height, 10);
         }

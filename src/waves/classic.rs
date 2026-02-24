@@ -27,10 +27,10 @@ impl ClassicWave {
         // Calculate speed scaling based on remaining enemies
         let alive_count = enemies.iter().filter(|e| e.active).count();
         let kill_progress = 1.0 - (alive_count as f32 / enemies.len() as f32);
-        
+
         self.idle_timer += dt;
         let idle_boost = (self.idle_timer / 5.0).floor() * 0.1;
-        
+
         let magnitude = (self.speed * (1.0 + kill_progress + idle_boost)).min(self.max_speed);
         let current_speed = magnitude * self.direction;
 
@@ -41,8 +41,9 @@ impl ClassicWave {
             enemy.x = (enemy.x as i32 + move_x).max(0) as u32;
             enemy.remain_x -= move_x as f32;
 
-            if (enemy.x <= margin && self.direction < 0.0) || 
-               (enemy.x + sprite.width >= width - margin && self.direction > 0.0) {
+            if (enemy.x <= margin && self.direction < 0.0)
+                || (enemy.x + sprite.width >= width - margin && self.direction > 0.0)
+            {
                 hit_edge = true;
             }
         }
