@@ -2,7 +2,7 @@ use crate::drawing::draw_sprite;
 use crate::entities::{
     beam::Beam, enemy::Enemy, particle::Particle, ship::Ship, Collidable, Sprite,
 };
-use crate::wave::Wave;
+use crate::waves::{WaveType, classic::ClassicWave, swoop::SwoopWave};
 use rodio::{Decoder, OutputStream, OutputStreamHandle, Source};
 use std::io::Cursor;
 
@@ -29,7 +29,8 @@ pub struct App {
     // Entities
     ship: Ship,
     enemies: Vec<Enemy>,
-    wave: Wave,
+    current_wave: WaveType, 
+    wave_count: u32,
     beams: Vec<Beam>,
     particles: Vec<Particle>,
     stars: Vec<Star>,
@@ -62,7 +63,6 @@ impl App {
             });
         }
 
-        // Initialize Ship
         let ship = Ship {
             x: (size.width / 2) - (sprites[0].width / 2),
             y: size.height - (size.height / 5),
@@ -73,9 +73,11 @@ impl App {
             active: true,
         };
 
-        let mut wave = Wave::new();
+        let wave_count = 1;
+        let current_wave = WaveType::Classic(ClassicWave::new(wave_count));
+        let enemies = current_wave.deploy(size.width);
+        
         let stars = generate_stars(&mut rng, size);
-
         let (stream, stream_handle) = OutputStream::try_default().unwrap();
 
         Self {
@@ -85,8 +87,9 @@ impl App {
             rng,
             input: InputState::new(),
             ship,
-            enemies: wave.deploy(size.width, size.height, &sprites[2]),
-            wave,
+            enemies,
+            current_wave,
+            wave_count,
             sprites,
             beams: Vec::new(),
             particles: Vec::new(),
@@ -108,8 +111,7 @@ impl App {
 
         if self.ship.is_active() {
             let s_img = &self.sprites[self.ship.sprite_idx];
-            self.ship
-                .update(&self.input, self.size, s_img.width, s_img.height, dt);
+            self.ship.update(&self.input, self.size, s_img.width, s_img.height, dt);
 
             if self.input.was_key_pressed(VirtualKeyCode::Space) {
                 self.fire_beam();
@@ -119,67 +121,93 @@ impl App {
         self.update_enemies(dt);
         self.update_beams(dt);
         self.update_particles(dt);
-
         self.process_collisions();
 
-        if self.wave.is_extinct(&self.enemies) {
-            self.enemies = self
-                .wave
-                .deploy(self.size.width, self.size.height, &self.sprites[2]);
+        // Wave Transition Logic
+        if self.current_wave.is_extinct(&self.enemies) {
+            self.transition_wave();
         }
 
         self.input.clear_just_pressed();
     }
 
+    fn transition_wave(&mut self) {
+        self.wave_count += 1;
+        
+        // Cycle behavior: Every 3rd wave is a Swoop
+        self.current_wave = if self.wave_count % 3 == 0 {
+            WaveType::Swoop(SwoopWave::new())
+        } else {
+            WaveType::Classic(ClassicWave::new(self.wave_count))
+        };
+        
+        self.enemies = self.current_wave.deploy(self.size.width);
+    }
+
     fn update_enemies(&mut self, dt: f32) {
-        let mut hit_edge = false;
-        let margin = 20;
-        let enemy_sprite_w = self.sprites[2].width;
+        if self.enemies.is_empty() { return; }
 
-        let alive_count = self.enemies.iter().filter(|e| e.active).count();
-        let total_count = self.enemies.len();
-        if total_count == 0 {
-            return;
-        }
+        self.current_wave.update(
+            &mut self.enemies, 
+            dt, 
+            self.size.width, 
+            &self.sprites[2]
+        );
+    }
 
-        // 1. Calculate Speed & Clamp
-        let kill_progress = 1.0 - (alive_count as f32 / total_count as f32);
-        self.wave.idle_timer += dt;
-        let idle_boost = (self.wave.idle_timer / 5.0).floor() * 0.1;
+    fn process_collisions(&mut self) {
+        let (s_w, s_h) = (self.sprites[0].width, self.sprites[0].height);
+        let (e_w, e_h) = (self.sprites[2].width, self.sprites[2].height);
 
-        let raw_magnitude = self.wave.move_speed * (1.0 + kill_progress + idle_boost);
-        let clamped_magnitude = raw_magnitude.min(self.wave.max_speed);
-        let current_speed = clamped_magnitude * self.wave.direction;
+        let mut play_explosion = false;
+        let mut beam_explosions = Vec::new();
 
-        // 2. Horizontal Movement
-        for enemy in self.enemies.iter_mut().filter(|e| e.active) {
-            enemy.remain_x += current_speed * dt;
-            let move_x = enemy.remain_x as i32;
+        for beam in self.beams.iter_mut() {
+            for enemy in self.enemies.iter_mut().filter(|e| e.active) {
+                if beam.collides_with(enemy, &self.sprites[1], &self.sprites[2]) {
+                    enemy.active = false;
+                    beam.y = -1000;
+                    beam_explosions.push((enemy.x + e_w / 2, enemy.y + e_h / 2));
+                    play_explosion = true;
 
-            let new_x = enemy.x as i32 + move_x;
-            enemy.x = new_x.max(0) as u32;
-            enemy.remain_x -= move_x as f32;
-
-            if (enemy.x <= margin && self.wave.direction < 0.0)
-                || (enemy.x + enemy_sprite_w >= self.size.width - margin
-                    && self.wave.direction > 0.0)
-            {
-                hit_edge = true;
+                    // Type-safe property reset using 'if let'
+                    if let WaveType::Classic(ref mut w) = self.current_wave {
+                        w.idle_timer = 0.0;
+                    }
+                    break;
+                }
             }
         }
 
-        // 3. Edge Flip & Drop
-        if hit_edge {
-            self.wave.direction *= -1.0;
-            for enemy in self.enemies.iter_mut() {
-                enemy.y += self.wave.drop_distance as u32;
-
-                // Small push to prevent getting stuck in the wall
-                let push_offset = (self.wave.direction * 5.0) as i32;
-                enemy.x = (enemy.x as i32 + push_offset).max(0) as u32;
-                enemy.remain_x = 0.0;
+        if self.ship.active {
+            let (sx, sy) = (self.ship.x, self.ship.y);
+            for enemy in self.enemies.iter().filter(|e| e.active) {
+                if enemy.collides_with(&self.ship, &self.sprites[2], &self.sprites[0]) {
+                    self.ship.active = false;
+                    self.spawn_explosion(sx + s_w / 2, sy + s_h / 2);
+                    self.play_sfx(self.sfx_explosion);
+                    break;
+                }
             }
         }
+
+        for (hx, hy) in beam_explosions {
+            self.spawn_explosion(hx, hy);
+        }
+        if play_explosion { self.play_sfx(self.sfx_explosion); }
+    }
+
+    pub fn reset(&mut self) {
+        self.ship.active = true;
+        self.ship.x = (self.size.width / 2) - (self.sprites[0].width / 2);
+        self.ship.y = self.size.height - (self.size.height / 5);
+
+        self.wave_count = 1;
+        self.current_wave = WaveType::Classic(ClassicWave::new(self.wave_count));
+        self.enemies = self.current_wave.deploy(self.size.width);
+
+        self.beams.clear();
+        self.particles.clear();
     }
 
     fn update_beams(&mut self, dt: f32) {
@@ -195,62 +223,9 @@ impl App {
 
     fn update_particles(&mut self, dt: f32) {
         for p in self.particles.iter_mut() {
-            p.x += p.vx * dt;
-            p.y += p.vy * dt;
-            p.life -= dt;
+            p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
         }
         self.particles.retain(|p| p.life > 0.0);
-    }
-
-    fn process_collisions(&mut self) {
-        let (s_w, s_h) = (self.sprites[0].width, self.sprites[0].height);
-        let (e_w, e_h) = (self.sprites[2].width, self.sprites[2].height);
-
-        // 1. Create a flag to check if we need to play an explosion sound
-        let mut play_explosion = false;
-        let mut beam_explosions = Vec::new();
-
-        // 2. BEAMS vs ENEMIES
-        for beam in self.beams.iter_mut() {
-            for enemy in self.enemies.iter_mut().filter(|e| e.active) {
-                if beam.collides_with(enemy, &self.sprites[1], &self.sprites[2]) {
-                    enemy.active = false;
-                    beam.y = -1000;
-                    beam_explosions.push((enemy.x + e_w / 2, enemy.y + e_h / 2));
-                    play_explosion = true; // Mark that a sound is needed
-                    self.wave.idle_timer = 0.0;
-                    break;
-                }
-            }
-        }
-
-        // 3. ENEMIES vs PLAYER
-        if self.ship.active {
-            let mut player_hit = false;
-            let (sx, sy) = (self.ship.x, self.ship.y);
-
-            for enemy in self.enemies.iter().filter(|e| e.active) {
-                if enemy.collides_with(&self.ship, &self.sprites[2], &self.sprites[0]) {
-                    player_hit = true;
-                    break;
-                }
-            }
-
-            if player_hit {
-                self.ship.active = false;
-                self.spawn_explosion(sx + s_w / 2, sy + s_h / 2);
-                self.play_sfx(self.sfx_explosion); // This is safe here because the loop is finished
-            }
-        }
-
-        // 4. Finalize: Spawn particle explosions and play sounds
-        for (hx, hy) in beam_explosions {
-            self.spawn_explosion(hx, hy);
-        }
-
-        if play_explosion {
-            self.play_sfx(self.sfx_explosion);
-        }
     }
 
     pub fn draw(&mut self) {
@@ -269,20 +244,10 @@ impl App {
 
         if self.ship.is_active() {
             let s = &self.sprites[self.ship.sprite_idx];
-            draw_sprite(
-                frame,
-                width,
-                height,
-                self.ship.x as i32,
-                self.ship.y as i32,
-                &s.pixels,
-                s.width,
-                s.height,
-            );
+            draw_sprite(frame, width, height, self.ship.x as i32, self.ship.y as i32, &s.pixels, s.width, s.height);
         } else {
             crate::drawing::draw_text_centered(frame, width, height, 10);
         }
-
         self.pixels.render().unwrap();
     }
 
@@ -355,25 +320,6 @@ impl App {
                 life: 0.4 + (self.rng.next_u32() % 300) as f32 / 1000.0,
             });
         }
-    }
-
-    pub fn reset(&mut self) {
-        // 1. Reset the Ship
-        self.ship.active = true;
-        self.ship.x = (self.size.width / 2) - (self.sprites[0].width / 2);
-        self.ship.y = self.size.height - (self.size.height / 5);
-
-        // 2. Reset the Wave and Enemies
-        self.wave = crate::wave::Wave::new(); // Starts at wave 0
-        self.enemies = self
-            .wave
-            .deploy(self.size.width, self.size.height, &self.sprites[2]);
-
-        // 3. Clear the projectiles and particles
-        self.beams.clear();
-        self.particles.clear();
-
-        println!("GAME RESTARTED");
     }
 
     fn play_sfx(&self, data: &'static [u8]) {

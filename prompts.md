@@ -156,3 +156,15 @@ Downloaded waves from: https://opengameart.org/
 Prompt: That is OK. I think there is an issue. The initial speed of the wave is little bit too slow. Make it 2x faster. I think that when the wave hits the left or right edge the speed resets. Can you fix it in the way that the speed does not reaset? Also, if player dose not kill any enemy ships, the wave should speed up after some timeout too.
 
 Prompt: limit max speed of enemies
+
+--------------------------------
+
+Prompt: At the moment all the waves are just array of enemies. But as the game evolves I would like to make those waves look differently - different pattern of movement, different attack and even different looking ships. And bosses! Should the wave be a polymorfic type? Shoud the wave be more generic type? C++ like polymorfism is not for free. The virtual function dispatch might not be the problem, but pointer traversing could be not cache friendly. Before updating code, share possible options.
+
+Prompt: Also each wave should be in separate file.
+
+Prompt: I think the horizontal movement in the update_enemies is in the wrong place. That is specific to one of the waves. It might be not right for different wave
+
+Prompt: I am not sure I like it. the details of waves implementations are leaking to a generic wavetype
+
+--------------------------------
