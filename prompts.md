@@ -168,3 +168,7 @@ Prompt: I think the horizontal movement in the update_enemies is in the wrong pl
 Prompt: I am not sure I like it. the details of waves implementations are leaking to a generic wavetype
 
 --------------------------------
+
+Prompt: Generate a score counter text at the left top of the screen. One kill is 1 point.
+
+Prompt: I think draw_text_centered should have colour as an argument

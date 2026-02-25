@@ -25,6 +25,7 @@ pub struct App {
     pub pixels: Pixels,
     pub size: PhysicalSize<u32>,
     pub input: InputState,
+    pub score: u32,
 
     // Entities
     ship: Ship,
@@ -86,6 +87,7 @@ impl App {
             size,
             rng,
             input: InputState::new(),
+            score: 0,
             ship,
             enemies,
             current_wave,
@@ -165,6 +167,9 @@ impl App {
             for enemy in self.enemies.iter_mut().filter(|e| e.active) {
                 if beam.collides_with(enemy, &self.sprites[1], &self.sprites[2]) {
                     enemy.active = false;
+
+                    self.score += 1;
+
                     beam.y = -1000;
                     beam_explosions.push((enemy.x + e_w / 2, enemy.y + e_h / 2));
                     play_explosion = true;
@@ -209,6 +214,8 @@ impl App {
 
         self.beams.clear();
         self.particles.clear();
+
+        self.score = 0;
     }
 
     fn update_beams(&mut self, dt: f32) {
@@ -245,6 +252,18 @@ impl App {
         Self::draw_beams(frame, width, height, &self.beams, &self.sprites[1]);
         Self::draw_particles(frame, width, height, &self.particles);
 
+        let score_text = format!("SCORE: {}", self.score);
+        crate::drawing::draw_text(
+            frame,
+            width,
+            height,
+            20,
+            20,
+            &score_text,
+            3,
+            crate::drawing::COLOR_WHITE,
+        );
+
         if self.ship.is_active() {
             let s = &self.sprites[self.ship.sprite_idx];
             draw_sprite(
@@ -258,7 +277,14 @@ impl App {
                 s.height,
             );
         } else {
-            crate::drawing::draw_text_centered(frame, width, height, 10);
+            crate::drawing::draw_text_centered(
+                frame,
+                width,
+                height,
+                "GAMEOVER",
+                10,
+                crate::drawing::COLOR_RED,
+            );
         }
         self.pixels.render().unwrap();
     }
