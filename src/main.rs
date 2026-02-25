@@ -38,20 +38,13 @@ fn main() {
     event_loop.run(move |event, _, control_flow| {
         match event {
             // Close window or press Escape to quit
-            Event::WindowEvent {
-                event: WindowEvent::CloseRequested,
-                ..
-            } => {
+            Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
                 *control_flow = ControlFlow::Exit;
             }
             Event::WindowEvent {
                 event:
                     WindowEvent::KeyboardInput {
-                        input:
-                            winit::event::KeyboardInput {
-                                virtual_keycode: Some(VirtualKeyCode::Escape),
-                                ..
-                            },
+                        input: winit::event::KeyboardInput { virtual_keycode: Some(VirtualKeyCode::Escape), .. },
                         ..
                     },
                 ..
@@ -59,10 +52,7 @@ fn main() {
                 *control_flow = ControlFlow::Exit;
             }
 
-            Event::WindowEvent {
-                event: WindowEvent::Resized(new_size),
-                ..
-            } => {
+            Event::WindowEvent { event: WindowEvent::Resized(new_size), .. } => {
                 let _ = app.pixels.resize_surface(new_size.width, new_size.height);
             }
 

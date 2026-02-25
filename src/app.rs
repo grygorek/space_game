@@ -1,7 +1,5 @@
 use crate::drawing::draw_sprite;
-use crate::entities::{
-    beam::Beam, enemy::Enemy, particle::Particle, ship::Ship, Collidable, Sprite,
-};
+use crate::entities::{beam::Beam, enemy::Enemy, particle::Particle, ship::Ship, Collidable, Sprite};
 use crate::waves::{classic::ClassicWave, swoop::SwoopWave, WaveType};
 use rodio::{Decoder, OutputStream, OutputStreamHandle, Source};
 use std::io::Cursor;
@@ -57,11 +55,7 @@ impl App {
         let mut sprites = Vec::new();
         for data in [SHIP_PNG, BEAM_PNG, ENEMY1_PNG] {
             let img = image::load_from_memory(data).unwrap().to_rgba8();
-            sprites.push(Sprite {
-                width: img.width(),
-                height: img.height(),
-                pixels: img.into_raw(),
-            });
+            sprites.push(Sprite { width: img.width(), height: img.height(), pixels: img.into_raw() });
         }
 
         let ship = Ship {
@@ -113,8 +107,7 @@ impl App {
 
         if self.ship.is_active() {
             let s_img = &self.sprites[self.ship.sprite_idx];
-            self.ship
-                .update(&self.input, self.size, s_img.width, s_img.height, dt);
+            self.ship.update(&self.input, self.size, s_img.width, s_img.height, dt);
 
             if self.input.was_key_pressed(VirtualKeyCode::Space) {
                 self.fire_beam();
@@ -152,8 +145,7 @@ impl App {
             return;
         }
 
-        self.current_wave
-            .update(&mut self.enemies, dt, self.size.width, &self.sprites[2]);
+        self.current_wave.update(&mut self.enemies, dt, self.size.width, &self.sprites[2]);
     }
 
     fn process_collisions(&mut self) {
@@ -253,69 +245,26 @@ impl App {
         Self::draw_particles(frame, width, height, &self.particles);
 
         let score_text = format!("SCORE: {}", self.score);
-        crate::drawing::draw_text(
-            frame,
-            width,
-            height,
-            20,
-            20,
-            &score_text,
-            3,
-            crate::drawing::COLOR_WHITE,
-        );
+        crate::drawing::draw_text(frame, width, height, 20, 20, &score_text, 3, crate::drawing::COLOR_WHITE);
 
         if self.ship.is_active() {
             let s = &self.sprites[self.ship.sprite_idx];
-            draw_sprite(
-                frame,
-                width,
-                height,
-                self.ship.x as i32,
-                self.ship.y as i32,
-                &s.pixels,
-                s.width,
-                s.height,
-            );
+            draw_sprite(frame, width, height, self.ship.x as i32, self.ship.y as i32, &s.pixels, s.width, s.height);
         } else {
-            crate::drawing::draw_text_centered(
-                frame,
-                width,
-                height,
-                "GAMEOVER",
-                10,
-                crate::drawing::COLOR_RED,
-            );
+            crate::drawing::draw_text_centered(frame, width, height, "GAMEOVER", 10, crate::drawing::COLOR_RED);
         }
         self.pixels.render().unwrap();
     }
 
     fn draw_enemies(frame: &mut [u8], width: u32, height: u32, enemies: &[Enemy], sprite: &Sprite) {
         for e in enemies.iter().filter(|e| e.active) {
-            draw_sprite(
-                frame,
-                width,
-                height,
-                e.x as i32,
-                e.y as i32,
-                &sprite.pixels,
-                sprite.width,
-                sprite.height,
-            );
+            draw_sprite(frame, width, height, e.x as i32, e.y as i32, &sprite.pixels, sprite.width, sprite.height);
         }
     }
 
     fn draw_beams(frame: &mut [u8], width: u32, height: u32, beams: &[Beam], sprite: &Sprite) {
         for b in beams {
-            draw_sprite(
-                frame,
-                width,
-                height,
-                b.x as i32,
-                b.y,
-                &sprite.pixels,
-                sprite.width,
-                sprite.height,
-            );
+            draw_sprite(frame, width, height, b.x as i32, b.y, &sprite.pixels, sprite.width, sprite.height);
         }
     }
 

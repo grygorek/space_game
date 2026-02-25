@@ -8,10 +8,7 @@ pub struct InputState {
 
 impl InputState {
     pub fn new() -> Self {
-        Self {
-            pressed_keys: HashSet::new(),
-            just_pressed: HashSet::new(),
-        }
+        Self { pressed_keys: HashSet::new(), just_pressed: HashSet::new() }
     }
 
     pub fn update(&mut self, event: &WindowEvent) {

@@ -8,10 +8,7 @@ pub struct SwoopWave {
 
 impl SwoopWave {
     pub fn new() -> Self {
-        Self {
-            timer: 0.0,
-            center_y: 550.0,
-        }
+        Self { timer: 0.0, center_y: 550.0 }
     }
 
     pub fn update(&mut self, enemies: &mut Vec<Enemy>, dt: f32, width: u32, _sprite: &Sprite) {
@@ -34,13 +31,7 @@ impl SwoopWave {
     pub fn deploy(&self, width: u32) -> Vec<Enemy> {
         let mut enemies = Vec::new();
         for i in 0..8 {
-            enemies.push(Enemy {
-                x: (width / 2) - 160 + (i * 40),
-                y: 100,
-                active: true,
-                remain_x: 0.0,
-                sprite_idx: 2,
-            });
+            enemies.push(Enemy { x: (width / 2) - 160 + (i * 40), y: 100, active: true, remain_x: 0.0, sprite_idx: 2 });
         }
         enemies
     }

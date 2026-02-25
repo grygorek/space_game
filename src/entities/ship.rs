@@ -13,14 +13,7 @@ pub struct Ship {
 }
 
 impl Ship {
-    pub fn update(
-        &mut self,
-        input: &InputState,
-        size: PhysicalSize<u32>,
-        sprite_w: u32,
-        _sprite_h: u32,
-        dt: f32,
-    ) {
+    pub fn update(&mut self, input: &InputState, size: PhysicalSize<u32>, sprite_w: u32, _sprite_h: u32, dt: f32) {
         if !self.active {
             return;
         }

@@ -15,11 +15,7 @@ impl Star {
     pub fn new_random(rng: &mut SimpleRng, width: u32, height: u32, start_anywhere: bool) -> Self {
         let diameter = (rng.next_u32() % 4) + 1;
         let x = (rng.next_u32() % width) as f32;
-        let y = if start_anywhere {
-            (rng.next_u32() % height) as f32
-        } else {
-            -(diameter as f32)
-        };
+        let y = if start_anywhere { (rng.next_u32() % height) as f32 } else { -(diameter as f32) };
 
         let alpha = 100 + (rng.next_u32() % 156) as u8;
 
@@ -30,12 +26,7 @@ impl Star {
             _ => [255, 240, 150, alpha],
         };
 
-        Star {
-            x,
-            y,
-            diameter,
-            color,
-        }
+        Star { x, y, diameter, color }
     }
 }
 

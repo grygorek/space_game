@@ -87,14 +87,7 @@ const FONT_8: [u8; 8] = [0x3C, 0x42, 0x42, 0x3C, 0x42, 0x42, 0x3C, 0x00];
 const FONT_9: [u8; 8] = [0x3C, 0x42, 0x42, 0x3E, 0x02, 0x02, 0x3C, 0x00];
 const FONT_COLON: [u8; 8] = [0x00, 0x18, 0x18, 0x00, 0x18, 0x18, 0x00, 0x00];
 
-pub fn draw_text_centered(
-    frame: &mut [u8],
-    width: u32,
-    height: u32,
-    text: &str,
-    scale: u32,
-    color: [u8; 4],
-) {
+pub fn draw_text_centered(frame: &mut [u8], width: u32, height: u32, text: &str, scale: u32, color: [u8; 4]) {
     let char_w = 8 * scale;
     let spacing = scale;
     let total_w = (text.len() as u32 * char_w) + ((text.len() as u32 - 1) * spacing);
@@ -106,16 +99,7 @@ pub fn draw_text_centered(
 }
 
 /// Generic text drawing function
-pub fn draw_text(
-    frame: &mut [u8],
-    width: u32,
-    height: u32,
-    x: u32,
-    y: u32,
-    text: &str,
-    scale: u32,
-    color: [u8; 4],
-) {
+pub fn draw_text(frame: &mut [u8], width: u32, height: u32, x: u32, y: u32, text: &str, scale: u32, color: [u8; 4]) {
     for (i, c) in text.chars().enumerate() {
         let glyph = get_glyph(c.to_ascii_uppercase());
         let x_offset = x + (i as u32 * (8 * scale + scale));
