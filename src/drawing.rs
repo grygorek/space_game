@@ -1,6 +1,21 @@
 pub const COLOR_RED: [u8; 4] = [255, 0, 0, 255];
-pub const COLOR_WHITE: [u8; 4] = [255, 255, 255, 255];
 pub const COLOR_GREEN: [u8; 4] = [0, 255, 0, 255];
+
+// UI & HUD Colors
+pub const COLOR_WHITE: [u8; 4] = [255, 255, 255, 255];
+pub const COLOR_BLACK: [u8; 4] = [0, 0, 0, 255];
+pub const COLOR_GRAY_DARK: [u8; 4] = [50, 50, 50, 255];
+pub const COLOR_GRAY_LIGHT: [u8; 4] = [180, 180, 180, 255];
+
+// Gameplay States
+pub const COLOR_HEALTH_GREEN: [u8; 4] = [0, 255, 100, 255];
+pub const COLOR_HEAT_ORANGE: [u8; 4] = [255, 165, 0, 255];
+pub const COLOR_OVERHEAT_RED: [u8; 4] = [255, 50, 50, 255];
+pub const COLOR_SCORE_GOLD: [u8; 4] = [255, 215, 0, 255];
+
+// Entities
+pub const COLOR_ENEMY_RED: [u8; 4] = [255, 0, 0, 255];
+pub const COLOR_BEAM_BLUE: [u8; 4] = [0, 200, 255, 255];
 
 pub fn set_pixel(frame: &mut [u8], width: u32, x: u32, y: u32, color: [u8; 4]) {
     let index = ((y * width + x) * 4) as usize;
@@ -8,6 +23,50 @@ pub fn set_pixel(frame: &mut [u8], width: u32, x: u32, y: u32, color: [u8; 4]) {
         // Using copy_from_slice is often faster than 4 manual assignments
         frame[index..index + 4].copy_from_slice(&color);
     }
+}
+
+pub fn draw_rect(
+    frame: &mut [u8],
+    width: u32,
+    height: u32,
+    dest_x: i32,
+    dest_y: i32,
+    rect_w: u32,
+    rect_h: u32,
+    color: [u8; 4],
+) {
+    for row in 0..rect_h {
+        for col in 0..rect_w {
+            let tx = dest_x + col as i32;
+            let ty = dest_y + row as i32;
+
+            // Boundary Check
+            if tx >= 0 && tx < width as i32 && ty >= 0 && ty < height as i32 {
+                set_pixel(frame, width, tx as u32, ty as u32, color);
+            }
+        }
+    }
+}
+
+pub fn draw_rect_outline(
+    frame: &mut [u8],
+    width: u32,
+    height: u32,
+    x: i32,
+    y: i32,
+    w: u32,
+    h: u32,
+    thickness: u32,
+    color: [u8; 4],
+) {
+    // Top
+    draw_rect(frame, width, height, x, y, w, thickness, color);
+    // Bottom
+    draw_rect(frame, width, height, x, y + (h as i32 - thickness as i32), w, thickness, color);
+    // Left
+    draw_rect(frame, width, height, x, y, thickness, h, color);
+    // Right
+    draw_rect(frame, width, height, x + (w as i32 - thickness as i32), y, thickness, h, color);
 }
 
 pub fn draw_sprite(
@@ -74,6 +133,8 @@ const FONT_G: [u8; 8] = [0x3C, 0x42, 0x40, 0x5E, 0x42, 0x42, 0x3C, 0x00];
 const FONT_A: [u8; 8] = [0x18, 0x24, 0x42, 0x7E, 0x42, 0x42, 0x42, 0x00];
 const FONT_M: [u8; 8] = [0x42, 0x66, 0x5A, 0x42, 0x42, 0x42, 0x42, 0x00];
 const FONT_V: [u8; 8] = [0x42, 0x42, 0x42, 0x42, 0x42, 0x24, 0x18, 0x00];
+const FONT_H: [u8; 8] = [0x42, 0x42, 0x42, 0x7E, 0x42, 0x42, 0x42, 0x00];
+const FONT_T: [u8; 8] = [0x7E, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x00];
 
 const FONT_0: [u8; 8] = [0x3C, 0x46, 0x4A, 0x52, 0x62, 0x42, 0x3C, 0x00];
 const FONT_1: [u8; 8] = [0x18, 0x28, 0x08, 0x08, 0x08, 0x08, 0x3E, 0x00];
@@ -134,6 +195,8 @@ fn get_glyph(c: char) -> &'static [u8; 8] {
         'R' => &FONT_R,
         'S' => &FONT_S,
         'C' => &FONT_C,
+        'H' => &FONT_H,
+        'T' => &FONT_T,
         '0' => &FONT_0,
         '1' => &FONT_1,
         '2' => &FONT_2,

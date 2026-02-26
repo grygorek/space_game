@@ -172,3 +172,9 @@ Prompt: I am not sure I like it. the details of waves implementations are leakin
 Prompt: Generate a score counter text at the left top of the screen. One kill is 1 point.
 
 Prompt: I think draw_text_centered should have colour as an argument
+
+--------------------------------
+
+Prompt: The fast shooting makes the game too easy. I like the 'heat' mechanics idea. With a 'heat' indicator at the top of the screen. Each shot adds 10% of heat. Heat slowly disspiates over time. Gun jams and plays sound when heat reaches 100%. Gun unjams when heat goes back to 0%. 
+
+--------------------------------

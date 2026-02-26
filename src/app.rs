@@ -1,4 +1,4 @@
-use crate::drawing::draw_sprite;
+use crate::drawing::*;
 use crate::entities::{beam::Beam, enemy::Enemy, particle::Particle, ship::Ship, Collidable, Sprite};
 use crate::waves::{classic::ClassicWave, swoop::SwoopWave, WaveType};
 use rodio::{Decoder, OutputStream, OutputStreamHandle, Source};
@@ -17,6 +17,7 @@ static BEAM_PNG: &[u8] = include_bytes!("../png/beam.png");
 static ENEMY1_PNG: &[u8] = include_bytes!("../png/enemy1.png");
 static SFX_SHOT: &[u8] = include_bytes!("../sfx/laser1.wav");
 static SFX_EXPLOSION: &[u8] = include_bytes!("../sfx/explosion.wav");
+static SFX_OVERHEAT: &[u8] = include_bytes!("../sfx/Metal_Click.wav");
 
 pub struct App {
     pub window: Window,
@@ -43,6 +44,7 @@ pub struct App {
     // We store the raw bytes of the sounds to "play" them instantly
     sfx_shot: &'static [u8],
     sfx_explosion: &'static [u8],
+    sfx_overheat: &'static [u8],
 }
 
 impl App {
@@ -66,6 +68,8 @@ impl App {
             remain_y: 0.0,
             sprite_idx: 0,
             active: true,
+            heat: 0.0,
+            is_overheated: false,
         };
 
         let wave_count = 1;
@@ -94,6 +98,7 @@ impl App {
             stream_handle,
             sfx_shot: SFX_SHOT,
             sfx_explosion: SFX_EXPLOSION,
+            sfx_overheat: SFX_OVERHEAT,
         }
     }
 
@@ -110,7 +115,11 @@ impl App {
             self.ship.update(&self.input, self.size, s_img.width, s_img.height, dt);
 
             if self.input.was_key_pressed(VirtualKeyCode::Space) {
-                self.fire_beam();
+                if self.ship.try_fire() {
+                    self.fire_beam();
+                } else {
+                    self.play_sfx(self.sfx_overheat);
+                }
             }
         }
 
@@ -244,16 +253,50 @@ impl App {
         Self::draw_beams(frame, width, height, &self.beams, &self.sprites[1]);
         Self::draw_particles(frame, width, height, &self.particles);
 
-        let score_text = format!("SCORE: {}", self.score);
-        crate::drawing::draw_text(frame, width, height, 20, 20, &score_text, 3, crate::drawing::COLOR_WHITE);
-
         if self.ship.is_active() {
             let s = &self.sprites[self.ship.sprite_idx];
             draw_sprite(frame, width, height, self.ship.x as i32, self.ship.y as i32, &s.pixels, s.width, s.height);
         } else {
-            crate::drawing::draw_text_centered(frame, width, height, "GAMEOVER", 10, crate::drawing::COLOR_RED);
+            draw_text_centered(frame, width, height, "GAMEOVER", 10, COLOR_RED);
         }
+
+        Self::draw_ui(frame, width, height, self.ship.heat, self.ship.is_overheated, self.score);
+
         self.pixels.render().unwrap();
+    }
+
+    fn draw_ui(frame: &mut [u8], width: u32, height: u32, heat: f32, is_overheated: bool, score: u32) {
+        // Layout Constants
+        let bar_w = 300;
+        let bar_h = 30;
+        let x = (width as i32 - bar_w as i32) / 2;
+        let y = 20;
+
+        // 1. Draw Outline (Thick 4px to match Scale 3 text)
+        let outline_color = if is_overheated { COLOR_OVERHEAT_RED } else { COLOR_GRAY_LIGHT };
+        draw_rect_outline(frame, width, height, x - 4, y - 4, bar_w + 8, bar_h + 8, 4, outline_color);
+
+        // 2. Draw Background
+        draw_rect(frame, width, height, x, y, bar_w, bar_h, COLOR_GRAY_DARK);
+
+        // 3. Draw Heat Fill
+        let fill_w = (heat * bar_w as f32) as u32;
+        let fill_color = if is_overheated {
+            COLOR_OVERHEAT_RED
+        } else if heat > 0.5 {
+            COLOR_HEAT_ORANGE
+        } else {
+            COLOR_HEALTH_GREEN
+        };
+        draw_rect(frame, width, height, x, y, fill_w, bar_h, fill_color);
+
+        // 5. Draw "HEAT" Label (Centered under bar, Scale 2)
+        // "HEAT" at scale 2 is roughly 70px wide
+        draw_text(frame, width, height, (width / 2) - 35, (y + bar_h as i32 + 10) as u32, "HEAT", 2, COLOR_WHITE);
+
+        // 6. Draw Score (Scale 3 as requested)
+        let score_text = format!("SCORE: {}", score);
+        draw_text(frame, width, height, 20, 20, &score_text, 3, COLOR_WHITE);
     }
 
     fn draw_enemies(frame: &mut [u8], width: u32, height: u32, enemies: &[Enemy], sprite: &Sprite) {

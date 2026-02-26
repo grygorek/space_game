@@ -10,12 +10,23 @@ pub struct Ship {
     pub remain_y: f32,
     pub sprite_idx: usize,
     pub active: bool,
+
+    // Gun overheat system
+    pub heat: f32,           // 0.0 to 1.0 (0% to 100%)
+    pub is_overheated: bool, // True if we hit 1.0 and are waiting to hit 0.5
 }
 
 impl Ship {
     pub fn update(&mut self, input: &InputState, size: PhysicalSize<u32>, sprite_w: u32, _sprite_h: u32, dt: f32) {
         if !self.active {
             return;
+        }
+
+        let cooling_rate = 0.2;
+        self.heat = (self.heat - cooling_rate * dt).max(0.0);
+
+        if self.is_overheated && self.heat == 0.0 {
+            self.is_overheated = false;
         }
 
         let mut dx = 0.0;
@@ -36,6 +47,18 @@ impl Ship {
         } else {
             self.remain_x = 0.0;
         }
+    }
+
+    pub fn try_fire(&mut self) -> bool {
+        if !self.is_overheated && self.active {
+            self.heat += 0.15;
+            if self.heat >= 1.0 {
+                self.heat = 1.0;
+                self.is_overheated = true;
+            }
+            return true; // "Yes, I fired a shot"
+        }
+        false // "No, I'm overheated or dead"
     }
 }
 
