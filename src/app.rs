@@ -36,6 +36,7 @@ use winit::window::Window;
 static SHIP_PNG: &[u8] = include_bytes!("../png/ship.png");
 static BEAM_PNG: &[u8] = include_bytes!("../png/beam.png");
 static ENEMY1_PNG: &[u8] = include_bytes!("../png/enemy1.png");
+static BOMB_PNG: &[u8] = include_bytes!("../png/bomb.png");
 static SFX_SHOT: &[u8] = include_bytes!("../sfx/laser1.wav");
 static SFX_EXPLOSION: &[u8] = include_bytes!("../sfx/explosion.wav");
 static SFX_OVERHEAT: &[u8] = include_bytes!("../sfx/Metal_Click.wav");
@@ -75,10 +76,23 @@ impl App {
         let mut rng = SimpleRng::seed_from_instant();
 
         // Load Sprites
+        // 1. Update the array to include BOMB_PNG
+        let image_data = [SHIP_PNG, BEAM_PNG, ENEMY1_PNG, BOMB_PNG];
         let mut sprites = Vec::new();
-        for data in [SHIP_PNG, BEAM_PNG, ENEMY1_PNG] {
-            let img = image::load_from_memory(data).unwrap().to_rgba8();
-            sprites.push(Sprite { width: img.width(), height: img.height(), pixels: img.into_raw() });
+
+        for (i, data) in image_data.iter().enumerate() {
+            let img = image::load_from_memory(data).unwrap();
+
+            let (final_width, final_height, final_pixels) = if i == 3 {
+                let resized = img.resize(img.width() / 30, img.height() / 30, image::imageops::FilterType::Nearest);
+                let rgba = resized.to_rgba8();
+                (rgba.width(), rgba.height(), rgba.into_raw())
+            } else {
+                let rgba = img.to_rgba8();
+                (rgba.width(), rgba.height(), rgba.into_raw())
+            };
+
+            sprites.push(Sprite { width: final_width, height: final_height, pixels: final_pixels });
         }
 
         let ship = Ship {
@@ -207,18 +221,33 @@ impl App {
 
         if self.ship.active {
             if let WaveType::Classic(ref mut wave) = self.current_wave {
-                let (sx, sy) = (self.ship.x as f32, self.ship.y as f32);
+                let s_x = self.ship.x as f32;
+                let s_y = self.ship.y as f32;
                 let s_w = self.sprites[0].width as f32;
                 let s_h = self.sprites[0].height as f32;
+                let b_w = self.sprites[3].width as f32;
+                let b_h = self.sprites[3].height as f32;
 
-                for (bx, by) in &wave.bombs {
-                    // Simple AABB collision check
-                    if *bx > sx && *bx < sx + s_w && *by > sy && *by < sy + s_h {
-                        self.ship.active = false;
-                        self.spawn_explosion(sx as u32 + (s_w / 2.0) as u32, sy as u32 + (s_h / 2.0) as u32);
-                        self.play_sfx(self.sfx_explosion);
-                        break;
+                let mut hit_detected = false;
+
+                // 1. Check for hits and remove the bomb
+                wave.bombs.retain(|(bx, by)| {
+                    let hit = *bx < s_x + s_w && *bx + b_w > s_x && *by < s_y + s_h && *by + b_h > s_y;
+                    if hit {
+                        hit_detected = true;
+                        return false; // Remove the bomb
                     }
+                    true // Keep the bomb
+                });
+
+                // 2. Now that we are OUTSIDE the retain (and the borrow of wave is done),
+                // we can safely modify self (ship, explosion, sfx).
+                if hit_detected {
+                    self.ship.active = false;
+                    let center_x = (s_x + s_w / 2.0) as u32;
+                    let center_y = (s_y + s_h / 2.0) as u32;
+                    self.spawn_explosion(center_x, center_y);
+                    self.play_sfx(self.sfx_explosion);
                 }
             }
         }
@@ -291,8 +320,19 @@ impl App {
         Self::draw_enemies(frame, width, height, &self.enemies, &self.sprites[2]);
 
         if let WaveType::Classic(ref wave) = self.current_wave {
+            // sprite_idx 3 is the rescaled bomb
+            let b_sprite = &self.sprites[3];
             for (bx, by) in &wave.bombs {
-                draw_rect(frame, width, height, *bx as i32, *by as i32, 4, 8, COLOR_RED);
+                draw_sprite(
+                    frame,
+                    width,
+                    height,
+                    *bx as i32,
+                    *by as i32,
+                    &b_sprite.pixels,
+                    b_sprite.width,
+                    b_sprite.height,
+                );
             }
         }
 
