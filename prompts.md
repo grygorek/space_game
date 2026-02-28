@@ -178,3 +178,5 @@ Prompt: I think draw_text_centered should have colour as an argument
 Prompt: The fast shooting makes the game too easy. I like the 'heat' mechanics idea. With a 'heat' indicator at the top of the screen. Each shot adds 10% of heat. Heat slowly disspiates over time. Gun jams and plays sound when heat reaches 100%. Gun unjams when heat goes back to 0%. 
 
 --------------------------------
+
+Prompt: When the classing wave appears, the ships come out of nowhere. Instead, make them fly from the top of the screen.

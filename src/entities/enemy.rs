@@ -9,7 +9,7 @@
 //
 // The above copyright notice and this permission notice shall be included in all
 // copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -21,8 +21,9 @@
 use super::Collidable;
 
 pub struct Enemy {
-    pub x: u32,
-    pub y: u32,
+    pub x: f32,
+    pub y: f32,
+    pub target_y: f32,
     pub active: bool,
     pub remain_x: f32,
     pub sprite_idx: usize,
@@ -30,11 +31,14 @@ pub struct Enemy {
 
 impl Collidable for Enemy {
     fn pos(&self) -> (u32, i32) {
-        (self.x, self.y as i32)
+        // Casting to handle the switch from f32 movement to integer pixels
+        (self.x as u32, self.y as i32)
     }
+
     fn set_active(&mut self, active: bool) {
         self.active = active;
     }
+
     fn is_active(&self) -> bool {
         self.active
     }

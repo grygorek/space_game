@@ -9,7 +9,7 @@
 //
 // The above copyright notice and this permission notice shall be included in all
 // copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -43,15 +43,27 @@ impl SwoopWave {
             let x_pos = (width as f32 / 2.0) + t.cos() * 400.0;
             let y_pos = self.center_y + (t * 2.0).sin() * 300.0;
 
-            enemy.x = x_pos as u32;
-            enemy.y = y_pos as u32;
+            enemy.x = x_pos as f32;
+            enemy.y = y_pos as f32;
         }
     }
 
     pub fn deploy(&self, width: u32) -> Vec<Enemy> {
         let mut enemies = Vec::new();
+        let width_f = width as f32;
+
         for i in 0..8 {
-            enemies.push(Enemy { x: (width / 2) - 160 + (i * 40), y: 100, active: true, remain_x: 0.0, sprite_idx: 2 });
+            let i_f = i as f32;
+            let target_y = 100.0; // Swoop waves usually have a target formation height too
+
+            enemies.push(Enemy {
+                x: (width_f / 2.0) - 160.0 + (i_f * 40.0),
+                y: -50.0, // Start slightly off-screen for a smooth swoop in
+                target_y, // Make sure your Swoop Enemy also has a target_y!
+                active: true,
+                remain_x: 0.0,
+                sprite_idx: 2,
+            });
         }
         enemies
     }
