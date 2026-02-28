@@ -9,7 +9,7 @@
 //
 // The above copyright notice and this permission notice shall be included in all
 // copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -20,6 +20,7 @@
 
 use crate::drawing::set_pixel;
 use winit::dpi::PhysicalSize;
+use crate::rng::SimpleRng;
 
 pub const MAX_STARS: usize = 120;
 
@@ -87,37 +88,5 @@ pub fn draw_star(frame: &mut [u8], frame_width: u32, frame_height: u32, star: &S
                 set_pixel(frame, frame_width, px, py, star.color);
             }
         }
-    }
-}
-
-// --- Utility: Xorshift Random Number Generator ---
-
-#[derive(Clone, Copy)]
-pub struct SimpleRng(u64);
-
-impl SimpleRng {
-    pub fn seed_from_instant() -> Self {
-        let seed = match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
-            Ok(dur) => dur.as_nanos() as u64,
-            Err(_) => 0u64,
-        };
-        SimpleRng(seed.wrapping_add(0x9E3779B97F4A7C15))
-    }
-
-    pub fn next_u64(&mut self) -> u64 {
-        let mut x = self.0;
-        // Ensure x is never 0 for Xorshift
-        if x == 0 {
-            x = 0x9E3779B97F4A7C15;
-        }
-        x ^= x << 13;
-        x ^= x >> 7;
-        x ^= x << 17;
-        self.0 = x;
-        x
-    }
-
-    pub fn next_u32(&mut self) -> u32 {
-        (self.next_u64() & 0xFFFF_FFFF) as u32
     }
 }

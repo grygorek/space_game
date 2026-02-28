@@ -9,7 +9,7 @@
 //
 // The above copyright notice and this permission notice shall be included in all
 // copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -30,10 +30,17 @@ pub enum WaveType {
 }
 
 impl WaveType {
-    pub fn update(&mut self, enemies: &mut Vec<Enemy>, dt: f32, width: u32, sprite: &Sprite) {
+    pub fn update(
+        &mut self,
+        enemies: &mut Vec<Enemy>,
+        dt: f32,
+        width: u32,
+        sprite: &Sprite,
+        player_ship: f32,
+    ) -> Vec<(f32, f32)> {
         match self {
-            WaveType::Classic(w) => w.update(enemies, dt, width, sprite),
-            WaveType::Swoop(s) => s.update(enemies, dt, width, sprite),
+            WaveType::Classic(w) => w.update(enemies, dt, width, sprite, player_ship),
+            WaveType::Swoop(s) => s.update(enemies, dt, width, sprite, player_ship),
         }
     }
 

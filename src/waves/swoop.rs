@@ -28,10 +28,20 @@ pub struct SwoopWave {
 
 impl SwoopWave {
     pub fn new() -> Self {
-        Self { timer: 0.0, center_y: 550.0 }
+        Self { 
+            timer: 0.0, 
+            center_y: 550.0 
+        }
     }
 
-    pub fn update(&mut self, enemies: &mut Vec<Enemy>, dt: f32, width: u32, _sprite: &Sprite) {
+    pub fn update(
+        &mut self, 
+        enemies: &mut Vec<Enemy>, 
+        dt: f32, 
+        width: u32, 
+        _sprite: &Sprite, 
+        _player_ship: f32
+    ) -> Vec<(f32, f32)> {
         self.timer += dt;
 
         for (i, enemy) in enemies.iter_mut().filter(|e| e.active).enumerate() {
@@ -40,12 +50,16 @@ impl SwoopWave {
             let t = self.timer + offset;
 
             // Figure-eight / Infinity pattern math
+            // x = center + cos(t), y = center + sin(2t)
             let x_pos = (width as f32 / 2.0) + t.cos() * 400.0;
             let y_pos = self.center_y + (t * 2.0).sin() * 300.0;
 
-            enemy.x = x_pos as f32;
-            enemy.y = y_pos as f32;
+            enemy.x = x_pos;
+            enemy.y = y_pos;
         }
+
+        // Return empty vector as Swoop enemies don't drop bombs yet
+        Vec::new()
     }
 
     pub fn deploy(&self, width: u32) -> Vec<Enemy> {
@@ -54,15 +68,15 @@ impl SwoopWave {
 
         for i in 0..8 {
             let i_f = i as f32;
-            let target_y = 100.0; // Swoop waves usually have a target formation height too
+            let target_y = 100.0;
 
             enemies.push(Enemy {
                 x: (width_f / 2.0) - 160.0 + (i_f * 40.0),
-                y: -50.0, // Start slightly off-screen for a smooth swoop in
-                target_y, // Make sure your Swoop Enemy also has a target_y!
+                y: -50.0,
+                target_y,
                 active: true,
-                remain_x: 0.0,
                 sprite_idx: 2,
+                is_diving: false, 
             });
         }
         enemies

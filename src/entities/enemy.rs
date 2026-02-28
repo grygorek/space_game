@@ -25,8 +25,8 @@ pub struct Enemy {
     pub y: f32,
     pub target_y: f32,
     pub active: bool,
-    pub remain_x: f32,
     pub sprite_idx: usize,
+    pub is_diving: bool, // Helps waves track state without complex enums
 }
 
 impl Collidable for Enemy {

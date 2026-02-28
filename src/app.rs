@@ -25,7 +25,8 @@ use rodio::{Decoder, OutputStream, OutputStreamHandle, Source};
 use std::io::Cursor;
 
 use crate::input::InputState;
-use crate::stars::{draw_star, generate_stars, update_stars, SimpleRng, Star};
+use crate::stars::{draw_star, generate_stars, update_stars, Star};
+use crate::rng::SimpleRng;
 use pixels::{Pixels, SurfaceTexture};
 use winit::dpi::PhysicalSize;
 use winit::event::VirtualKeyCode;
@@ -174,7 +175,12 @@ impl App {
             return;
         }
 
-        self.current_wave.update(&mut self.enemies, dt, self.size.width, &self.sprites[2]);
+        //let bombs = self.current_wave.update(&mut self.enemies, dt, self.size.width, &self.sprites[2]);
+        let _bombs =
+            self.current_wave.update(&mut self.enemies, dt, self.size.width, &self.sprites[2], self.ship.x as f32);
+        //for (x, y) in bombs {
+        //    self.spawn_enemy_bomb(x, y); // Or however you handle enemy bullets
+        //}
     }
 
     fn process_collisions(&mut self) {

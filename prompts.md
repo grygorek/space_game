@@ -180,3 +180,5 @@ Prompt: The fast shooting makes the game too easy. I like the 'heat' mechanics i
 --------------------------------
 
 Prompt: When the classing wave appears, the ships come out of nowhere. Instead, make them fly from the top of the screen.
+
+Prompt: Make enemies to dive in a kamikaze arc move to colide with player ship. Make them drop bombs on the way. For the first wave just make one at once to dive. But as the waves coming, make more ships to dive and randomly left or right arc.

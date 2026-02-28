@@ -24,6 +24,7 @@ pub mod entities;
 pub mod input;
 pub mod stars;
 pub mod waves;
+pub mod rng;
 
 use app::App;
 use winit::dpi::{LogicalSize, PhysicalSize};
