@@ -25,8 +25,8 @@ use rodio::{Decoder, OutputStream, OutputStreamHandle, Source};
 use std::io::Cursor;
 
 use crate::input::InputState;
-use crate::stars::{draw_star, generate_stars, update_stars, Star};
 use crate::rng::SimpleRng;
+use crate::stars::{draw_star, generate_stars, update_stars, Star};
 use pixels::{Pixels, SurfaceTexture};
 use winit::dpi::PhysicalSize;
 use winit::event::VirtualKeyCode;
@@ -175,12 +175,7 @@ impl App {
             return;
         }
 
-        //let bombs = self.current_wave.update(&mut self.enemies, dt, self.size.width, &self.sprites[2]);
-        let _bombs =
-            self.current_wave.update(&mut self.enemies, dt, self.size.width, &self.sprites[2], self.ship.x as f32);
-        //for (x, y) in bombs {
-        //    self.spawn_enemy_bomb(x, y); // Or however you handle enemy bullets
-        //}
+        self.current_wave.update(&mut self.enemies, dt, self.size.width, &self.sprites[2], self.ship.x as f32);
     }
 
     fn process_collisions(&mut self) {
@@ -206,6 +201,24 @@ impl App {
                         w.idle_timer = 0.0;
                     }
                     break;
+                }
+            }
+        }
+
+        if self.ship.active {
+            if let WaveType::Classic(ref mut wave) = self.current_wave {
+                let (sx, sy) = (self.ship.x as f32, self.ship.y as f32);
+                let s_w = self.sprites[0].width as f32;
+                let s_h = self.sprites[0].height as f32;
+
+                for (bx, by) in &wave.bombs {
+                    // Simple AABB collision check
+                    if *bx > sx && *bx < sx + s_w && *by > sy && *by < sy + s_h {
+                        self.ship.active = false;
+                        self.spawn_explosion(sx as u32 + (s_w / 2.0) as u32, sy as u32 + (s_h / 2.0) as u32);
+                        self.play_sfx(self.sfx_explosion);
+                        break;
+                    }
                 }
             }
         }
@@ -276,6 +289,13 @@ impl App {
         }
 
         Self::draw_enemies(frame, width, height, &self.enemies, &self.sprites[2]);
+
+        if let WaveType::Classic(ref wave) = self.current_wave {
+            for (bx, by) in &wave.bombs {
+                draw_rect(frame, width, height, *bx as i32, *by as i32, 4, 8, COLOR_RED);
+            }
+        }
+
         Self::draw_beams(frame, width, height, &self.beams, &self.sprites[1]);
         Self::draw_particles(frame, width, height, &self.particles);
 

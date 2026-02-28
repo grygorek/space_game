@@ -40,9 +40,10 @@ pub struct ClassicWave {
     pub dive_timer: f32,
     pub dive_interval: f32,
 
+    pub bombs: Vec<(f32, f32)>,
+
     pub rng: SimpleRng,
 }
-// ... (Diver and ClassicWave struct definitions remain the same) ...
 
 impl ClassicWave {
     pub fn new(wave_count: u32) -> Self {
@@ -55,6 +56,7 @@ impl ClassicWave {
             divers: Vec::new(),
             dive_timer: 0.0,
             dive_interval: (4.0 - (wave_count as f32 * 0.5)).max(1.0),
+            bombs: Vec::new(),
             rng: SimpleRng::seed_from_instant(),
         }
     }
@@ -67,8 +69,6 @@ impl ClassicWave {
         sprite: &Sprite,
         ship_x: f32,
     ) -> Vec<(f32, f32)> {
-        let mut bombs = Vec::new();
-
         for enemy in enemies.iter_mut().filter(|e| e.active && !e.is_diving) {
             if enemy.y < enemy.target_y {
                 enemy.y += 250.0 * dt;
@@ -82,7 +82,6 @@ impl ClassicWave {
 
         if any_enemy_on_screen {
             self.dive_timer += dt;
-
             let max_divers = ((self.speed / 250.0).floor() as usize).max(1);
 
             if self.dive_timer >= self.dive_interval {
@@ -93,10 +92,17 @@ impl ClassicWave {
             }
 
             self.move_in_formation(enemies, dt, width, sprite);
-            bombs = self.update_divers(enemies, dt, ship_x);
+
+            self.update_divers(enemies, dt, ship_x);
         }
 
-        bombs
+        // Move the bombs downward every frame
+        self.bombs.retain_mut(|(_, y)| {
+            *y += 450.0 * dt;
+            *y < 900.0 // Remove if it goes off bottom
+        });
+
+        self.bombs.clone()
     }
 
     fn launch_diver(&mut self, enemies: &mut Vec<Enemy>) {
@@ -132,10 +138,7 @@ impl ClassicWave {
         }
     }
 
-    pub fn update_divers(&mut self, enemies: &mut Vec<Enemy>, dt: f32, ship_x: f32) -> Vec<(f32, f32)> {
-        let mut new_bombs = Vec::new();
-
-        // 1. Calculate the current center of the formation for returning ships
+    pub fn update_divers(&mut self, enemies: &mut Vec<Enemy>, dt: f32, ship_x: f32) {
         let formation_ships: Vec<&Enemy> = enemies.iter().filter(|e| e.active && !e.is_diving).collect();
         let formation_center_x = if !formation_ships.is_empty() {
             formation_ships.iter().map(|e| e.x).sum::<f32>() / formation_ships.len() as f32
@@ -149,40 +152,40 @@ impl ClassicWave {
                 return false;
             }
 
+            let old_timer = diver.timer;
             diver.timer += dt;
 
-            // Increased from 350.0 to 500.0 for a punchier dive
+            // 1. Vertical Movement (Diving fast)
             enemy.y += 500.0 * dt;
 
-            // --- THE ARC MATH ---
-            // flight_progress reaches 1.0 (full hook) at around 0.7 seconds
+            // 2. Arc & Chase Logic
             let flight_progress = (diver.timer * 1.4).min(1.0);
 
-            // swing_out: Pushes them away from formation center initially
+            // Initial outward swing
             let swing_out = (1.0 - flight_progress) * 450.0 * diver.direction;
 
-            // pull_to_player: Gradually steers them toward the ship's X position
-            let pull_to_player = flight_progress * (ship_x - enemy.x).signum() * 250.0;
+            // Increased Chase: Pulling toward player's X (Increased to 300.0)
+            let pull_to_player = flight_progress * (ship_x - enemy.x).signum() * 300.0;
 
-            // Combine the forces
             enemy.x += (swing_out + pull_to_player) * dt;
-
-            // --- SCREEN BOUNDARY CHECK ---
-            // Prevents the arc from taking them off the 800px wide screen
             enemy.x = enemy.x.clamp(10.0, 790.0);
 
-            // --- WARP / RETURN LOGIC ---
+            // 3. THE DROP
+            // We drop at enemy.x. Because the enemy is "pulling" toward ship_x,
+            // the bomb will naturally be aimed near the player.
+            if old_timer < 0.5 && diver.timer >= 0.5 {
+                self.bombs.push((enemy.x + 16.0, enemy.y + 20.0));
+            }
+
+            // 4. Reset Logic (Off bottom)
             if enemy.y > 850.0 {
                 enemy.y = -100.0;
-                // Snap back to their relative spot in the moving grid
                 enemy.x = formation_center_x + diver.start_x;
                 enemy.is_diving = false;
                 return false;
             }
             true
         });
-
-        new_bombs
     }
 
     pub fn move_in_formation(&mut self, enemies: &mut Vec<Enemy>, dt: f32, width: u32, sprite: &Sprite) {
