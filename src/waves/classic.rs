@@ -117,7 +117,9 @@ impl Wave for ClassicWave {
         if any_enemy_on_screen {
             // Dives
             self.dive_timer += dt;
-            let max_divers = ((self.speed / 200.0).floor() as usize).max(1);
+            let calculated_max = ((self.speed - 120.0) / 100.0).floor() as i32;
+            let max_divers = calculated_max.max(1) as usize;
+
             if self.dive_timer >= self.dive_interval && self.divers.len() < max_divers {
                 self.launch_diver(enemies, ship_x, height);
                 self.dive_timer = 0.0;
