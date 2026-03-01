@@ -109,7 +109,7 @@ impl App {
 
         let wave_count = 1;
         let current_wave = WaveType::Classic(ClassicWave::new(wave_count));
-        let enemies = current_wave.deploy(size.width);
+        let enemies = current_wave.deploy(size.width, size.height);
 
         let stars = generate_stars(&mut rng, size);
         let (stream, stream_handle) = OutputStream::try_default().unwrap();
@@ -181,7 +181,7 @@ impl App {
             WaveType::Classic(ClassicWave::new(self.wave_count))
         };
 
-        self.enemies = self.current_wave.deploy(self.size.width);
+        self.enemies = self.current_wave.deploy(self.size.width, self.size.height);
     }
 
     fn update_enemies(&mut self, dt: f32) {
@@ -189,7 +189,14 @@ impl App {
             return;
         }
 
-        self.current_wave.update(&mut self.enemies, dt, self.size.width, &self.sprites[2], self.ship.x as f32);
+        self.current_wave.update(
+            &mut self.enemies,
+            dt,
+            self.size.width,
+            self.size.height,
+            &self.sprites[2],
+            self.ship.x as f32,
+        );
     }
 
     fn process_collisions(&mut self) {
@@ -279,7 +286,7 @@ impl App {
 
         self.wave_count = 1;
         self.current_wave = WaveType::Classic(ClassicWave::new(self.wave_count));
-        self.enemies = self.current_wave.deploy(self.size.width);
+        self.enemies = self.current_wave.deploy(self.size.width, self.size.height);
 
         self.beams.clear();
         self.particles.clear();

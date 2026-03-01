@@ -62,17 +62,27 @@ impl ClassicWave {
         }
     }
 
-    pub fn deploy(&self, width: u32) -> Vec<Enemy> {
+    pub fn deploy(&self, width: u32, height: u32) -> Vec<Enemy> {
         let mut enemies = Vec::new();
-        let (cols, rows, spacing) = (10, 5, 100);
-        let start_x = (width as i32 - ((cols - 1) * spacing) as i32) / 2;
+        let (cols, rows) = (10, 5);
+        let spacing_x = (width as f32 * 0.05) as i32;
+        let spacing_y = (height as f32 * 0.06) as i32;
+
+        let formation_width = (cols - 1) * spacing_x;
+        let start_x = (width as i32 - formation_width) / 2;
+
+        let top_margin = (height as f32 * 0.10) as i32;
 
         for row in 0..rows {
             for col in 0..cols {
+                let target_x = (start_x + (col * spacing_x)) as f32;
+                let target_y = (top_margin + (row * spacing_y)) as f32;
+
                 enemies.push(Enemy {
-                    x: (start_x + (col * spacing) as i32) as f32,
-                    y: -100.0 - (row as f32 * 60.0),
-                    target_y: (row * spacing + 100) as f32,
+                    x: target_x,
+                    // Start enemies above the screen for the "fly-in" effect
+                    y: -100.0 - (row as f32 * spacing_y as f32),
+                    target_y,
                     active: true,
                     sprite_idx: 2,
                     is_diving: false,
@@ -87,6 +97,7 @@ impl ClassicWave {
         enemies: &mut Vec<Enemy>,
         dt: f32,
         width: u32,
+        height: u32,
         sprite: &Sprite,
         ship_x: f32,
     ) -> Vec<(f32, f32, f32)> {
@@ -107,24 +118,24 @@ impl ClassicWave {
             let max_divers = ((self.speed / 200.0).floor() as usize).max(1);
 
             if self.dive_timer >= self.dive_interval && self.divers.len() < max_divers {
-                self.launch_diver(enemies, ship_x);
+                self.launch_diver(enemies, ship_x, height);
                 self.dive_timer = 0.0;
             }
 
             self.move_in_formation(enemies, dt, width, sprite);
-            self.update_divers(enemies, dt, width);
+            self.update_divers(enemies, dt, width, height);
         }
 
         // Bomb Physics
         self.bombs.retain_mut(|(x, y, vx)| {
             *x += *vx * dt;
             *y += 450.0 * dt;
-            *y < 950.0 && *x > -50.0 && *x < width as f32 + 50.0
+            *y < height as f32 + 50.0 && *x > -50.0 && *x < width as f32 + 50.0
         });
 
         self.bombs.clone()
     }
-    fn launch_diver(&mut self, enemies: &mut Vec<Enemy>, ship_x: f32) {
+    fn launch_diver(&mut self, enemies: &mut Vec<Enemy>, ship_x: f32, height: u32) {
         let eligible: Vec<usize> = enemies
             .iter()
             .enumerate()
@@ -138,7 +149,7 @@ impl ClassicWave {
             let enemy = &mut enemies[idx];
             enemy.is_diving = true;
 
-            let target_y = 800.0;
+            let target_y = height as f32 * 1.25; // slightly bellow to ensure it goes off-screen
             let dx = ship_x - enemy.x;
             let dy = target_y - enemy.y;
 
@@ -164,6 +175,7 @@ impl ClassicWave {
                 diff += 2.0 * std::f32::consts::PI;
             }
             let direction = if diff > 0.0 { 1.0 } else { -1.0 };
+            let base_speed = height as f32 * 0.3;
 
             self.divers.push(Diver {
                 enemy_index: idx,
@@ -173,13 +185,13 @@ impl ClassicWave {
                 radius: r,
                 current_angle: start_angle,
                 // Ensure speed is high enough to feel like a dive
-                angular_velocity: direction * (400.0 / r).clamp(0.8, 2.5),
+                angular_velocity: direction * (base_speed / r).clamp(0.5, 1.8),
                 bomb_dropped: false,
             });
         }
     }
 
-    pub fn update_divers(&mut self, enemies: &mut Vec<Enemy>, dt: f32, width: u32) {
+    pub fn update_divers(&mut self, enemies: &mut Vec<Enemy>, dt: f32, width: u32, height: u32) {
         let formation_center_x = self.get_formation_center(enemies);
 
         self.divers.retain_mut(|diver| {
@@ -200,7 +212,7 @@ impl ClassicWave {
 
             // RIGOROUS SCREEN BOUNDARY CHECK
             // If the ship is outside this box, it's gone.
-            let is_off_screen = enemy.y > 910.0 ||      // Below screen
+            let is_off_screen = enemy.y > height as f32 ||      // Below screen
                                 enemy.x < -100.0 ||     // Left of screen
                                 enemy.x > width as f32 + 100.0 || // Right of screen
                                 (enemy.y < -100.0 && diver.angular_velocity.abs() > 0.0); // Back at top

@@ -9,7 +9,7 @@
 //
 // The above copyright notice and this permission notice shall be included in all
 // copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -22,12 +22,11 @@ pub mod app;
 pub mod drawing;
 pub mod entities;
 pub mod input;
+pub mod rng;
 pub mod stars;
 pub mod waves;
-pub mod rng;
 
 use app::App;
-use winit::dpi::{LogicalSize, PhysicalSize};
 use winit::event::{Event, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Fullscreen, WindowBuilder};
@@ -35,30 +34,34 @@ use winit::window::{Fullscreen, WindowBuilder};
 fn main() {
     let event_loop = EventLoop::new();
 
-    // Resolution constants
-    let width: u32 = 1920;
-    let height: u32 = 1080;
+    // 1. Get the primary monitor
+    let monitor = event_loop.primary_monitor().expect("Failed to find a monitor");
 
-    // Determine the monitor for Fullscreen
-    let monitor = event_loop.primary_monitor();
+    // 2. Detect the native resolution
+    // .size() returns PhysicalSize<u32>, which is exactly what we need for the game state
+    let native_size = monitor.size();
+    let width = native_size.width;
+    let height = native_size.height;
+
+    println!("Detected native resolution: {}x{}", width, height);
 
     let window = WindowBuilder::new()
         .with_title("Rust Space Invaders")
-        .with_inner_size(LogicalSize::new(width as f64, height as f64))
-        // Enable Borderless Fullscreen
-        .with_fullscreen(Some(Fullscreen::Borderless(monitor)))
+        // Use the detected native size for the window
+        .with_inner_size(native_size)
+        // Enable Borderless Fullscreen on the detected monitor
+        .with_fullscreen(Some(Fullscreen::Borderless(Some(monitor))))
         .build(&event_loop)
         .unwrap();
 
     window.set_cursor_visible(false);
 
-    let size = PhysicalSize::new(width, height);
-    let mut app = App::new(window, size);
+    // 3. Initialize your App with the dynamic size instead of hardcoded 1920x1080
+    let mut app = App::new(window, native_size);
     let mut last_time = std::time::Instant::now();
 
     event_loop.run(move |event, _, control_flow| {
         match event {
-            // Close window or press Escape to quit
             Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
                 *control_flow = ControlFlow::Exit;
             }
@@ -74,6 +77,7 @@ fn main() {
             }
 
             Event::WindowEvent { event: WindowEvent::Resized(new_size), .. } => {
+                // Keep the pixel buffer in sync with the window size
                 let _ = app.pixels.resize_surface(new_size.width, new_size.height);
             }
 

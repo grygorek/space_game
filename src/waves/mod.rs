@@ -35,19 +35,20 @@ impl WaveType {
         enemies: &mut Vec<Enemy>,
         dt: f32,
         width: u32,
+        height: u32,
         sprite: &Sprite,
         player_ship: f32,
     ) -> Vec<(f32, f32, f32)> {
         match self {
-            WaveType::Classic(w) => w.update(enemies, dt, width, sprite, player_ship),
-            WaveType::Swoop(s) => s.update(enemies, dt, width, sprite, player_ship),
+            WaveType::Classic(w) => w.update(enemies, dt, width, height, sprite, player_ship),
+            WaveType::Swoop(s) => s.update(enemies, dt, width, height, sprite, player_ship),
         }
     }
 
-    pub fn deploy(&self, width: u32) -> Vec<Enemy> {
+    pub fn deploy(&self, width: u32, height: u32) -> Vec<Enemy> {
         match self {
-            WaveType::Classic(w) => w.deploy(width),
-            WaveType::Swoop(s) => s.deploy(width),
+            WaveType::Classic(w) => w.deploy(width, height),
+            WaveType::Swoop(s) => s.deploy(width, height),
         }
     }
 
