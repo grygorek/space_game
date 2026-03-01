@@ -185,5 +185,15 @@ Prompt: Make enemies to dive in a kamikaze arc move to colide with player ship. 
 
 Prompt: there is a png/bomb.png file with a bomb image. Please use it instead of drawing a red square. Also the image is quiet large. Can you rescale it to make it 4x smaller?
 
+Prompt: What about the dive movement on the line of an arc . The arc drawn where an enemy ship about to dive and player lay on an arc of a circle. I am not sure about the radious. Maybe furthest bottom corner of the screen? Do you have a better idea?
 
+Prompt: There is something wrong with the arc enemy patch calculation. It goes up and down. Very weird. And after finishing the dive it does not come back to its place.
 
+Prompt: still wrong. I think I can see why. there is an misunderstanding. There is arc swing phace and chase phase. I want the arc to be the chase. A ship breaks from the formation and does an arc swing attack and drop bomb early in the attack.
+
+Prompt: If the enemy ship and player ship are begining and end of the arc, why does the pivot need to move? I want to make the radius variable and depend on the distance of the player (or diving ship, it does not matter). In that way diver will always be a kamikaze ship aiming at player.
+
+Prompt: arc is perfect now, but return to formation got broken
+
+Gemin was struggling to produce good arc logic. It was unnecessarily complicating the code. Even if once got one element good it was breaking another. After few iterations
+it finally got it right.

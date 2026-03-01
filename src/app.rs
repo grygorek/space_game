@@ -231,7 +231,7 @@ impl App {
                 let mut hit_detected = false;
 
                 // 1. Check for hits and remove the bomb
-                wave.bombs.retain(|(bx, by)| {
+                wave.bombs.retain(|(bx, by, _)| {
                     let hit = *bx < s_x + s_w && *bx + b_w > s_x && *by < s_y + s_h && *by + b_h > s_y;
                     if hit {
                         hit_detected = true;
@@ -320,9 +320,9 @@ impl App {
         Self::draw_enemies(frame, width, height, &self.enemies, &self.sprites[2]);
 
         if let WaveType::Classic(ref wave) = self.current_wave {
-            // sprite_idx 3 is the rescaled bomb
             let b_sprite = &self.sprites[3];
-            for (bx, by) in &wave.bombs {
+            // Note the (bx, by, _vx) pattern here
+            for (bx, by, _vx) in &wave.bombs {
                 draw_sprite(
                     frame,
                     width,

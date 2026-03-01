@@ -41,7 +41,7 @@ impl SwoopWave {
         width: u32, 
         _sprite: &Sprite, 
         _player_ship: f32
-    ) -> Vec<(f32, f32)> {
+    ) -> Vec<(f32, f32, f32)> {
         self.timer += dt;
 
         for (i, enemy) in enemies.iter_mut().filter(|e| e.active).enumerate() {

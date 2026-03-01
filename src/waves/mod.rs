@@ -37,7 +37,7 @@ impl WaveType {
         width: u32,
         sprite: &Sprite,
         player_ship: f32,
-    ) -> Vec<(f32, f32)> {
+    ) -> Vec<(f32, f32, f32)> {
         match self {
             WaveType::Classic(w) => w.update(enemies, dt, width, sprite, player_ship),
             WaveType::Swoop(s) => s.update(enemies, dt, width, sprite, player_ship),
