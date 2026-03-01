@@ -18,26 +18,23 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-use crate::entities::enemy::Enemy;
-use crate::entities::Sprite;
-use crate::entities::ship::Ship;
+use crate::entities::Collidable;
 
-pub mod classic;
-pub mod swoop;
+pub struct Projectile {
+    pub x: f32,
+    pub y: f32,
+    pub active: bool,
+    pub vx: f32, // Horizontal speed if any
+}
 
-pub trait Wave {
-    fn update(&mut self, enemies: &mut Vec<Enemy>, dt: f32, width: u32, height: u32, sprite: &Sprite, player_x: f32);
-    fn deploy(&self, width: u32, height: u32) -> Vec<Enemy>;
-    
-    // The generic collision hook
-    fn check_player_collision(&mut self, ship: &Ship, p_sprite: &Sprite, s_sprite: &Sprite) -> bool;
-    
-    // The generic drawing hook
-    fn draw_projectiles(&self, frame: &mut [u8], width: u32, height: u32, sprite: &Sprite);
-
-    // The generic event hook for when an enemy dies
-    fn on_enemy_killed(&mut self);
-
-    // Check if wave is over
-    fn is_extinct(&self, enemies: &[Enemy]) -> bool;
+impl Collidable for Projectile {
+    fn pos(&self) -> (u32, i32) {
+        (self.x as u32, self.y as i32)
+    }
+    fn set_active(&mut self, active: bool) {
+        self.active = active;
+    }
+    fn is_active(&self) -> bool {
+        self.active
+    }
 }

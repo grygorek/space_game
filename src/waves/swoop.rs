@@ -19,7 +19,9 @@
 // THE SOFTWARE.
 
 use crate::entities::enemy::Enemy;
+use crate::entities::ship::Ship;
 use crate::entities::Sprite;
+use crate::waves::Wave;
 
 pub struct SwoopWave {
     pub timer: f32,
@@ -30,53 +32,64 @@ impl SwoopWave {
     pub fn new() -> Self {
         Self { timer: 0.0, center_y: 550.0 }
     }
+}
 
-    pub fn update(
+impl Wave for SwoopWave {
+    fn update(
         &mut self,
         enemies: &mut Vec<Enemy>,
         dt: f32,
         width: u32,
         _height: u32,
         _sprite: &Sprite,
-        _player_ship: f32,
-    ) -> Vec<(f32, f32, f32)> {
+        _player_x: f32,
+    ) {
         self.timer += dt;
 
         for (i, enemy) in enemies.iter_mut().filter(|e| e.active).enumerate() {
-            // Give each enemy a slightly different start time (offset)
             let offset = i as f32 * 0.4;
             let t = self.timer + offset;
 
-            // Figure-eight / Infinity pattern math
-            // x = center + cos(t), y = center + sin(2t)
+            // Infinity pattern: x = center + cos(t), y = center + sin(2t)
             let x_pos = (width as f32 / 2.0) + t.cos() * 400.0;
             let y_pos = self.center_y + (t * 2.0).sin() * 300.0;
 
             enemy.x = x_pos;
             enemy.y = y_pos;
         }
-
-        // Return empty vector as Swoop enemies don't drop bombs yet
-        Vec::new()
     }
 
-    pub fn deploy(&self, width: u32, _height: u32) -> Vec<Enemy> {
+    fn deploy(&self, width: u32, _height: u32) -> Vec<Enemy> {
         let mut enemies = Vec::new();
         let width_f = width as f32;
 
         for i in 0..8 {
-            let i_f = i as f32;
-            let target_y = 100.0;
-
             enemies.push(Enemy {
-                x: (width_f / 2.0) - 160.0 + (i_f * 40.0),
+                x: (width_f / 2.0) - 160.0 + (i as f32 * 40.0),
                 y: -50.0,
-                target_y,
+                target_y: 100.0,
                 active: true,
                 sprite_idx: 2,
                 is_diving: false,
             });
         }
         enemies
+    }
+
+    fn check_player_collision(&mut self, _ship: &Ship, _p_sprite: &Sprite, _s_sprite: &Sprite) -> bool {
+        // Swoop currently has no projectiles to check
+        false
+    }
+
+    fn draw_projectiles(&self, _frame: &mut [u8], _width: u32, _height: u32, _sprite: &Sprite) {
+        // Swoop has no projectiles to draw
+    }
+
+    fn on_enemy_killed(&mut self) {
+        // No special logic needed when a swoop enemy dies
+    }
+
+    fn is_extinct(&self, enemies: &[Enemy]) -> bool {
+        enemies.iter().all(|e| !e.active)
     }
 }

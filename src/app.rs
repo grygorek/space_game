@@ -20,7 +20,7 @@
 
 use crate::drawing::*;
 use crate::entities::{beam::Beam, enemy::Enemy, particle::Particle, ship::Ship, Collidable, Sprite};
-use crate::waves::{classic::ClassicWave, swoop::SwoopWave, WaveType};
+use crate::waves::{classic::ClassicWave, swoop::SwoopWave, Wave};
 use rodio::{Decoder, OutputStream, OutputStreamHandle, Source};
 use std::io::Cursor;
 
@@ -51,7 +51,7 @@ pub struct App {
     // Entities
     ship: Ship,
     enemies: Vec<Enemy>,
-    current_wave: WaveType,
+    current_wave: Box<dyn Wave>,
     wave_count: u32,
     beams: Vec<Beam>,
     particles: Vec<Particle>,
@@ -108,7 +108,7 @@ impl App {
         };
 
         let wave_count = 1;
-        let current_wave = WaveType::Classic(ClassicWave::new(wave_count));
+        let current_wave: Box<dyn Wave> = Box::new(ClassicWave::new(wave_count));
         let enemies = current_wave.deploy(size.width, size.height);
 
         let stars = generate_stars(&mut rng, size);
@@ -176,9 +176,9 @@ impl App {
 
         // Cycle behavior: Every 3rd wave is a Swoop
         self.current_wave = if self.wave_count % 3 == 0 {
-            WaveType::Swoop(SwoopWave::new())
+            Box::new(SwoopWave::new())
         } else {
-            WaveType::Classic(ClassicWave::new(self.wave_count))
+            Box::new(ClassicWave::new(self.wave_count))
         };
 
         self.enemies = self.current_wave.deploy(self.size.width, self.size.height);
@@ -217,45 +217,25 @@ impl App {
                     beam_explosions.push((enemy.x as u32 + e_w / 2, enemy.y as u32 + e_h / 2));
                     play_explosion = true;
 
-                    // Type-safe property reset using 'if let'
-                    if let WaveType::Classic(ref mut w) = self.current_wave {
-                        w.idle_timer = 0.0;
-                    }
+                    self.current_wave.on_enemy_killed();
                     break;
                 }
             }
         }
 
         if self.ship.active {
-            if let WaveType::Classic(ref mut wave) = self.current_wave {
-                let s_x = self.ship.x as f32;
-                let s_y = self.ship.y as f32;
-                let s_w = self.sprites[0].width as f32;
-                let s_h = self.sprites[0].height as f32;
-                let b_w = self.sprites[3].width as f32;
-                let b_h = self.sprites[3].height as f32;
-
-                let mut hit_detected = false;
-
-                // 1. Check for hits and remove the bomb
-                wave.bombs.retain(|(bx, by, _)| {
-                    let hit = *bx < s_x + s_w && *bx + b_w > s_x && *by < s_y + s_h && *by + b_h > s_y;
-                    if hit {
-                        hit_detected = true;
-                        return false; // Remove the bomb
-                    }
-                    true // Keep the bomb
-                });
-
-                // 2. Now that we are OUTSIDE the retain (and the borrow of wave is done),
-                // we can safely modify self (ship, explosion, sfx).
-                if hit_detected {
-                    self.ship.active = false;
-                    let center_x = (s_x + s_w / 2.0) as u32;
-                    let center_y = (s_y + s_h / 2.0) as u32;
-                    self.spawn_explosion(center_x, center_y);
-                    self.play_sfx(self.sfx_explosion);
-                }
+            // We pass the Ship and the Sprites (Heavy Data) into the Wave
+            // The Wave handles the "Thin Data" (Projectiles) internally
+            if self.current_wave.check_player_collision(
+                &self.ship,
+                &self.sprites[3], // Bomb sprite
+                &self.sprites[0], // Ship sprite
+            ) {
+                self.ship.active = false;
+                let center_x = self.ship.x + (self.sprites[0].width / 2);
+                let center_y = self.ship.y + (self.sprites[0].height / 2);
+                self.spawn_explosion(center_x, center_y);
+                self.play_sfx(self.sfx_explosion);
             }
         }
 
@@ -285,7 +265,7 @@ impl App {
         self.ship.y = self.size.height - (self.size.height / 5);
 
         self.wave_count = 1;
-        self.current_wave = WaveType::Classic(ClassicWave::new(self.wave_count));
+        self.current_wave = Box::new(ClassicWave::new(self.wave_count));
         self.enemies = self.current_wave.deploy(self.size.width, self.size.height);
 
         self.beams.clear();
@@ -325,24 +305,7 @@ impl App {
         }
 
         Self::draw_enemies(frame, width, height, &self.enemies, &self.sprites[2]);
-
-        if let WaveType::Classic(ref wave) = self.current_wave {
-            let b_sprite = &self.sprites[3];
-            // Note the (bx, by, _vx) pattern here
-            for (bx, by, _vx) in &wave.bombs {
-                draw_sprite(
-                    frame,
-                    width,
-                    height,
-                    *bx as i32,
-                    *by as i32,
-                    &b_sprite.pixels,
-                    b_sprite.width,
-                    b_sprite.height,
-                );
-            }
-        }
-
+        self.current_wave.draw_projectiles(frame, width, height, &self.sprites[3]);
         Self::draw_beams(frame, width, height, &self.beams, &self.sprites[1]);
         Self::draw_particles(frame, width, height, &self.particles);
 
@@ -354,7 +317,6 @@ impl App {
         }
 
         Self::draw_ui(frame, width, height, self.ship.heat, self.ship.is_overheated, self.score);
-
         self.pixels.render().unwrap();
     }
 

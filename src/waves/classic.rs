@@ -18,13 +18,18 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+use crate::drawing::draw_sprite;
 use crate::entities::enemy::Enemy;
+use crate::entities::projectile::Projectile;
+use crate::entities::ship::Ship;
+use crate::entities::Collidable;
 use crate::entities::Sprite;
 use crate::rng::SimpleRng;
+use crate::waves::Wave;
 
 pub struct Diver {
     pub enemy_index: usize,
-    pub start_x: f32, // Relative offset for return to formation
+    pub start_x: f32,
     pub pivot_x: f32,
     pub pivot_y: f32,
     pub radius: f32,
@@ -42,7 +47,7 @@ pub struct ClassicWave {
     pub divers: Vec<Diver>,
     pub dive_timer: f32,
     pub dive_interval: f32,
-    pub bombs: Vec<(f32, f32, f32)>, // (x, y, vx)
+    pub bombs: Vec<Projectile>, // Changed to Vec of Projectile structs
     pub rng: SimpleRng,
 }
 
@@ -62,27 +67,32 @@ impl ClassicWave {
         }
     }
 
-    pub fn deploy(&self, width: u32, height: u32) -> Vec<Enemy> {
+    fn get_formation_center(&self, enemies: &[Enemy]) -> f32 {
+        let active_in_formation: Vec<&Enemy> = enemies.iter().filter(|e| e.active && !e.is_diving).collect();
+        if !active_in_formation.is_empty() {
+            active_in_formation.iter().map(|e| e.x).sum::<f32>() / active_in_formation.len() as f32
+        } else {
+            400.0
+        }
+    }
+}
+
+impl Wave for ClassicWave {
+    fn deploy(&self, width: u32, height: u32) -> Vec<Enemy> {
         let mut enemies = Vec::new();
         let (cols, rows) = (10, 5);
         let spacing_x = (width as f32 * 0.05) as i32;
         let spacing_y = (height as f32 * 0.06) as i32;
-
         let formation_width = (cols - 1) * spacing_x;
         let start_x = (width as i32 - formation_width) / 2;
-
         let top_margin = (height as f32 * 0.10) as i32;
 
         for row in 0..rows {
             for col in 0..cols {
-                let target_x = (start_x + (col * spacing_x)) as f32;
-                let target_y = (top_margin + (row * spacing_y)) as f32;
-
                 enemies.push(Enemy {
-                    x: target_x,
-                    // Start enemies above the screen for the "fly-in" effect
+                    x: (start_x + (col * spacing_x)) as f32,
                     y: -100.0 - (row as f32 * spacing_y as f32),
-                    target_y,
+                    target_y: (top_margin + (row * spacing_y)) as f32,
                     active: true,
                     sprite_idx: 2,
                     is_diving: false,
@@ -92,16 +102,8 @@ impl ClassicWave {
         enemies
     }
 
-    pub fn update(
-        &mut self,
-        enemies: &mut Vec<Enemy>,
-        dt: f32,
-        width: u32,
-        height: u32,
-        sprite: &Sprite,
-        ship_x: f32,
-    ) -> Vec<(f32, f32, f32)> {
-        // Entry movement
+    fn update(&mut self, enemies: &mut Vec<Enemy>, dt: f32, width: u32, height: u32, sprite: &Sprite, ship_x: f32) {
+        // Entry movement logic
         for enemy in enemies.iter_mut().filter(|e| e.active && !e.is_diving) {
             if enemy.y < enemy.target_y {
                 enemy.y += 250.0 * dt;
@@ -112,29 +114,65 @@ impl ClassicWave {
         }
 
         let any_enemy_on_screen = enemies.iter().any(|e| e.active && e.y >= e.target_y);
-
         if any_enemy_on_screen {
+            // Dives
             self.dive_timer += dt;
             let max_divers = ((self.speed / 200.0).floor() as usize).max(1);
-
             if self.dive_timer >= self.dive_interval && self.divers.len() < max_divers {
                 self.launch_diver(enemies, ship_x, height);
                 self.dive_timer = 0.0;
             }
-
+            // Formation & Diver movement
             self.move_in_formation(enemies, dt, width, sprite);
             self.update_divers(enemies, dt, width, height);
         }
 
-        // Bomb Physics
-        self.bombs.retain_mut(|(x, y, vx)| {
-            *x += *vx * dt;
-            *y += 450.0 * dt;
-            *y < height as f32 + 50.0 && *x > -50.0 && *x < width as f32 + 50.0
+        // Updated Bomb Physics using Projectile struct
+        self.bombs.retain_mut(|bomb| {
+            bomb.x += bomb.vx * dt;
+            bomb.y += 450.0 * dt;
+            bomb.y < height as f32 + 50.0 && bomb.x > -50.0 && bomb.x < width as f32 + 50.0
         });
-
-        self.bombs.clone()
     }
+
+    fn check_player_collision(&mut self, ship: &Ship, p_sprite: &Sprite, s_sprite: &Sprite) -> bool {
+        let mut hit = false;
+        self.bombs.retain(|bomb| {
+            if bomb.collides_with(ship, p_sprite, s_sprite) {
+                hit = true;
+                false
+            } else {
+                true
+            }
+        });
+        hit
+    }
+
+    fn draw_projectiles(&self, frame: &mut [u8], width: u32, height: u32, sprite: &Sprite) {
+        for bomb in &self.bombs {
+            draw_sprite(
+                frame,
+                width,
+                height,
+                bomb.x as i32,
+                bomb.y as i32,
+                &sprite.pixels,
+                sprite.width,
+                sprite.height,
+            );
+        }
+    }
+
+    fn on_enemy_killed(&mut self) {
+        self.idle_timer = 0.0;
+    }
+
+    fn is_extinct(&self, enemies: &[Enemy]) -> bool {
+        enemies.iter().all(|e| !e.active)
+    }
+}
+
+impl ClassicWave {
     fn launch_diver(&mut self, enemies: &mut Vec<Enemy>, ship_x: f32, height: u32) {
         let eligible: Vec<usize> = enemies
             .iter()
@@ -144,62 +182,32 @@ impl ClassicWave {
             .collect();
 
         if let Some(&idx) = eligible.get(self.rng.next_range(0, eligible.len())) {
-            let formation_center_x = self.get_formation_center(enemies);
-
+            let center_x = self.get_formation_center(enemies);
             let enemy = &mut enemies[idx];
             enemy.is_diving = true;
 
-            let target_y = height as f32 * 1.25; // slightly bellow to ensure it goes off-screen
-            let dx = ship_x - enemy.x;
-            let dy = target_y - enemy.y;
-
-            let mid_x = (enemy.x + ship_x) / 2.0;
-            let mid_y = (enemy.y + target_y) / 2.0;
-
-            // Determine if the player is to the left (-1) or right (+1)
             let side = if ship_x > enemy.x { 1.0 } else { -1.0 };
-
-            // INCREASED CURVE INTENSITY & ADDED Y-OFFSET
-            // This pushes the pivot point significantly further away and LOWER.
-            // A lower pivot means the "bottom" of the circle is off-screen.
-            let curve_intensity = 0.8;
-            // 2. Use 'side' to flip the pivot offset
-            // If the player is on the right, the pivot shifts one way.
-            // If the player is on the left, the pivot shifts the opposite way.
-            let p_x = mid_x - (dy * curve_intensity * side);
-            let p_y = (mid_y + (dx * curve_intensity * side)) + (height as f32 * 0.15);
-
+            let p_x = ((enemy.x + ship_x) / 2.0) - ((height as f32 * 1.25 - enemy.y) * 0.8 * side);
+            let p_y =
+                ((enemy.y + height as f32 * 1.25) / 2.0) + ((ship_x - enemy.x) * 0.8 * side) + (height as f32 * 0.15);
             let r = ((enemy.x - p_x).powi(2) + (enemy.y - p_y).powi(2)).sqrt();
             let start_angle = (enemy.y - p_y).atan2(enemy.x - p_x);
-            let target_angle = (target_y - p_y).atan2(ship_x - p_x);
-
-            let mut diff = target_angle - start_angle;
-            if diff > std::f32::consts::PI {
-                diff -= 2.0 * std::f32::consts::PI;
-            }
-            if diff < -std::f32::consts::PI {
-                diff += 2.0 * std::f32::consts::PI;
-            }
-            let direction = if diff > 0.0 { 1.0 } else { -1.0 };
-            let base_speed = height as f32 * 0.3;
 
             self.divers.push(Diver {
                 enemy_index: idx,
-                start_x: enemy.x - formation_center_x,
+                start_x: enemy.x - center_x,
                 pivot_x: p_x,
                 pivot_y: p_y,
                 radius: r,
                 current_angle: start_angle,
-                // Ensure speed is high enough to feel like a dive
-                angular_velocity: direction * (base_speed / r).clamp(0.5, 1.8),
+                angular_velocity: side * ((height as f32 * 0.3) / r).clamp(0.5, 1.8),
                 bomb_dropped: false,
             });
         }
     }
 
-    pub fn update_divers(&mut self, enemies: &mut Vec<Enemy>, dt: f32, width: u32, height: u32) {
+    fn update_divers(&mut self, enemies: &mut Vec<Enemy>, dt: f32, width: u32, height: u32) {
         let formation_center_x = self.get_formation_center(enemies);
-
         self.divers.retain_mut(|diver| {
             let enemy = &mut enemies[diver.enemy_index];
             if !enemy.active {
@@ -212,20 +220,13 @@ impl ClassicWave {
 
             if !diver.bomb_dropped && enemy.y > 400.0 {
                 let vx = -diver.radius * diver.angular_velocity * diver.current_angle.sin();
-                self.bombs.push((enemy.x + 16.0, enemy.y + 20.0, vx * 0.4));
+                self.bombs.push(Projectile { x: enemy.x + 16.0, y: enemy.y + 20.0, vx: vx * 0.4, active: true });
                 diver.bomb_dropped = true;
             }
 
-            // RIGOROUS SCREEN BOUNDARY CHECK
-            // If the ship is outside this box, it's gone.
-            let is_off_screen = enemy.y > height as f32 ||      // Below screen
-                                enemy.x < -100.0 ||     // Left of screen
-                                enemy.x > width as f32 + 100.0 || // Right of screen
-                                (enemy.y < -100.0 && diver.angular_velocity.abs() > 0.0); // Back at top
-
-            if is_off_screen {
+            if enemy.y > height as f32 || enemy.x < -100.0 || enemy.x > width as f32 + 100.0 {
                 enemy.is_diving = false;
-                enemy.y = -200.0; // Reset way up high
+                enemy.y = -200.0;
                 enemy.x = formation_center_x + diver.start_x;
                 return false;
             }
@@ -233,19 +234,9 @@ impl ClassicWave {
         });
     }
 
-    fn get_formation_center(&self, enemies: &[Enemy]) -> f32 {
-        let active_in_formation: Vec<&Enemy> = enemies.iter().filter(|e| e.active && !e.is_diving).collect();
-        if !active_in_formation.is_empty() {
-            active_in_formation.iter().map(|e| e.x).sum::<f32>() / active_in_formation.len() as f32
-        } else {
-            400.0
-        }
-    }
-
-    pub fn move_in_formation(&mut self, enemies: &mut Vec<Enemy>, dt: f32, width: u32, sprite: &Sprite) {
+    fn move_in_formation(&mut self, enemies: &mut Vec<Enemy>, dt: f32, width: u32, sprite: &Sprite) {
         let mut hit_edge = false;
         let vel = self.speed * self.direction;
-
         for enemy in enemies.iter_mut().filter(|e| e.active && !e.is_diving) {
             enemy.x += vel * dt;
             if (enemy.x <= 20.0 && self.direction < 0.0)
@@ -254,7 +245,6 @@ impl ClassicWave {
                 hit_edge = true;
             }
         }
-
         if hit_edge {
             self.direction *= -1.0;
             for enemy in enemies.iter_mut() {

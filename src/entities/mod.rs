@@ -22,6 +22,7 @@ pub mod beam;
 pub mod enemy;
 pub mod particle;
 pub mod ship;
+pub mod projectile;
 
 pub trait Collidable {
     fn pos(&self) -> (u32, i32);

@@ -197,3 +197,7 @@ Prompt: arc is perfect now, but return to formation got broken
 
 Gemin was struggling to produce good arc logic. It was unnecessarily complicating the code. Even if once got one element good it was breaking another. After few iterations
 it finally got it right.
+
+--------------------------------
+
+The logic of bombs and colisions was leaked to app. App was depending on particular implementation of the wave. I asked to rearchitect it. It proposed to create a trait for the wave and move all the logic related to bombs and collisions to the wave implementation. App will just call update and draw on the wave. It did that and now app is not depending on any particular implementation of the wave. It is more generic and can support different waves with different mechanics.
