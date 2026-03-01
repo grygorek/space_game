@@ -156,12 +156,18 @@ impl ClassicWave {
             let mid_x = (enemy.x + ship_x) / 2.0;
             let mid_y = (enemy.y + target_y) / 2.0;
 
+            // Determine if the player is to the left (-1) or right (+1)
+            let side = if ship_x > enemy.x { 1.0 } else { -1.0 };
+
             // INCREASED CURVE INTENSITY & ADDED Y-OFFSET
             // This pushes the pivot point significantly further away and LOWER.
             // A lower pivot means the "bottom" of the circle is off-screen.
             let curve_intensity = 0.8;
-            let p_x = mid_x - dy * curve_intensity;
-            let p_y = (mid_y + dx * curve_intensity) + 200.0; // Force pivot down
+            // 2. Use 'side' to flip the pivot offset
+            // If the player is on the right, the pivot shifts one way.
+            // If the player is on the left, the pivot shifts the opposite way.
+            let p_x = mid_x - (dy * curve_intensity * side);
+            let p_y = (mid_y + (dx * curve_intensity * side)) + (height as f32 * 0.15);
 
             let r = ((enemy.x - p_x).powi(2) + (enemy.y - p_y).powi(2)).sqrt();
             let start_angle = (enemy.y - p_y).atan2(enemy.x - p_x);
