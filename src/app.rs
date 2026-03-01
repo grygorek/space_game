@@ -211,7 +211,7 @@ impl App {
                 if beam.collides_with(enemy, &self.sprites[1], &self.sprites[2]) {
                     enemy.active = false;
 
-                    self.score += 1;
+                    self.score += if enemy.is_diving { 5 } else { 1 };
 
                     beam.y = -1000;
                     beam_explosions.push((enemy.x as u32 + e_w / 2, enemy.y as u32 + e_h / 2));
