@@ -41,13 +41,12 @@ pub struct Diver {
 pub struct ClassicWave {
     pub speed: f32,
     pub direction: f32,
-    pub drop_dist: u32,
     pub idle_timer: f32,
     pub max_speed: f32,
     pub divers: Vec<Diver>,
     pub dive_timer: f32,
     pub dive_interval: f32,
-    pub bombs: Vec<Projectile>, // Changed to Vec of Projectile structs
+    pub bombs: Vec<Projectile>,
     pub rng: SimpleRng,
 }
 
@@ -56,7 +55,6 @@ impl ClassicWave {
         Self {
             speed: 200.0 + (wave_count as f32 * 30.0),
             direction: 1.0,
-            drop_dist: 20,
             idle_timer: 0.0,
             max_speed: 800.0,
             divers: Vec::new(),
@@ -85,7 +83,7 @@ impl Wave for ClassicWave {
         let spacing_y = (height as f32 * 0.06) as i32;
         let formation_width = (cols - 1) * spacing_x;
         let start_x = (width as i32 - formation_width) / 2;
-        let top_margin = (height as f32 * 0.10) as i32;
+        let top_margin = (height as f32 * 0.20) as i32;
 
         for row in 0..rows {
             for col in 0..cols {
@@ -103,10 +101,10 @@ impl Wave for ClassicWave {
     }
 
     fn update(&mut self, enemies: &mut Vec<Enemy>, dt: f32, width: u32, height: u32, sprite: &Sprite, ship_x: f32) {
-        // Entry movement logic
+        // Show enemies descending into formation
         for enemy in enemies.iter_mut().filter(|e| e.active && !e.is_diving) {
             if enemy.y < enemy.target_y {
-                enemy.y += 250.0 * dt;
+                enemy.y += 300.0 * dt;
                 if enemy.y > enemy.target_y {
                     enemy.y = enemy.target_y;
                 }
@@ -239,6 +237,7 @@ impl ClassicWave {
     fn move_in_formation(&mut self, enemies: &mut Vec<Enemy>, dt: f32, width: u32, sprite: &Sprite) {
         let mut hit_edge = false;
         let vel = self.speed * self.direction;
+
         for enemy in enemies.iter_mut().filter(|e| e.active && !e.is_diving) {
             enemy.x += vel * dt;
             if (enemy.x <= 20.0 && self.direction < 0.0)
@@ -247,13 +246,13 @@ impl ClassicWave {
                 hit_edge = true;
             }
         }
+
         if hit_edge {
             self.direction *= -1.0;
+            let drop_amount = 30.0;
+
             for enemy in enemies.iter_mut() {
-                enemy.target_y += self.drop_dist as f32;
-                if !enemy.is_diving {
-                    enemy.y += self.drop_dist as f32;
-                }
+                enemy.target_y += drop_amount;
             }
         }
     }
