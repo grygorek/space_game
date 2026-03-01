@@ -83,8 +83,13 @@ impl App {
         for (i, data) in image_data.iter().enumerate() {
             let img = image::load_from_memory(data).unwrap();
 
+            let resize_scale = 20;
             let (final_width, final_height, final_pixels) = if i == 3 {
-                let resized = img.resize(img.width() / 30, img.height() / 30, image::imageops::FilterType::Nearest);
+                let resized = img.resize(
+                    img.width() / resize_scale,
+                    img.height() / resize_scale,
+                    image::imageops::FilterType::Nearest,
+                );
                 let rgba = resized.to_rgba8();
                 (rgba.width(), rgba.height(), rgba.into_raw())
             } else {
