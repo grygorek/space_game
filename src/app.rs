@@ -263,6 +263,8 @@ impl App {
         self.ship.active = true;
         self.ship.x = (self.size.width / 2) - (self.sprites[0].width / 2);
         self.ship.y = self.size.height - (self.size.height / 5);
+        self.ship.heat = 0.0;
+        self.ship.is_overheated = false;
 
         self.wave_count = 1;
         self.current_wave = Box::new(ClassicWave::new(self.wave_count));

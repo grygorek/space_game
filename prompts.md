@@ -209,3 +209,10 @@ Prompt: I would like to have starting 2 divers at wave 4.
 --------------------------------
 
 Prompt: When App is created in creates Pixels instance and then I draw on a frame from pixes. From the architectural point of view, is creating surface and pixel inside of App make sense? Or maybe it should be created in main and passed to App? Also, creating pixels is extremly slow. Can you move the creation of pixels to main.rs and create app instance later. And pass pixels to App as an arguement?
+
+Prompt: Few things to improve the swoop wave. Firstly, the infinite shape loop is too small. Should be wider and taller.
+Prompt: I like the phase shift, I like the width oscilation.
+Prompt: Eliminate the dead zone. Player can sit in the center and just shoot.
+
+Prompt: Add divers. There will be two attacks of the divers. One will be that when the formation is descending, a random enemy will not keep with formation but kamikaze down at the player. If surwived will come back at the tail of the formation.
+Prompt: Almost good. When the formation comes down, the enemies are aligned and it is easy to shoot. The should spread more when they are coming down (at max streaches of left or right)
