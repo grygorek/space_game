@@ -27,6 +27,7 @@ pub mod stars;
 pub mod waves;
 
 use app::App;
+use pixels::{Pixels, SurfaceTexture};
 use winit::event::{Event, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Fullscreen, WindowBuilder};
@@ -34,30 +35,25 @@ use winit::window::{Fullscreen, WindowBuilder};
 fn main() {
     let event_loop = EventLoop::new();
 
-    // 1. Get the primary monitor
+    // 1. Setup Monitor and Resolution
     let monitor = event_loop.primary_monitor().expect("Failed to find a monitor");
-
-    // 2. Detect the native resolution
-    // .size() returns PhysicalSize<u32>, which is exactly what we need for the game state
     let native_size = monitor.size();
-    let width = native_size.width;
-    let height = native_size.height;
 
-    println!("Detected native resolution: {}x{}", width, height);
+    println!("Detected native resolution: {}x{}", native_size.width, native_size.height);
 
     let window = WindowBuilder::new()
-        .with_title("Rust Space Invaders")
+        .with_title("Space Game")
         // Use the detected native size for the window
         .with_inner_size(native_size)
         // Enable Borderless Fullscreen on the detected monitor
         .with_fullscreen(Some(Fullscreen::Borderless(Some(monitor))))
+        .with_visible(false) // Start hidden to avoid showing the cursor during load
         .build(&event_loop)
         .unwrap();
 
-    window.set_cursor_visible(false);
+    window.set_cursor_visible(true); // Show cursor during load
 
-    // 3. Initialize your App with the dynamic size instead of hardcoded 1920x1080
-    let mut app = App::new(window, native_size);
+    let mut app: Option<App> = None;
     let mut last_time = std::time::Instant::now();
 
     event_loop.run(move |event, _, control_flow| {
@@ -65,6 +61,7 @@ fn main() {
             Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
                 *control_flow = ControlFlow::Exit;
             }
+
             Event::WindowEvent {
                 event:
                     WindowEvent::KeyboardInput {
@@ -76,26 +73,56 @@ fn main() {
                 *control_flow = ControlFlow::Exit;
             }
 
-            Event::WindowEvent { event: WindowEvent::Resized(new_size), .. } => {
-                // Keep the pixel buffer in sync with the window size
-                let _ = app.pixels.resize_surface(new_size.width, new_size.height);
-            }
-
             Event::MainEventsCleared => {
-                let now = std::time::Instant::now();
-                let dt = now.duration_since(last_time).as_secs_f32();
-                last_time = now;
+                // LAZY INITIALIZATION
+                if app.is_none() {
+                    println!("Initializing GPU (Pixels) and Loading Assets...");
 
-                app.update(dt);
-                app.window.request_redraw();
+                    // Create Pixels using the NATIVE size (game resolution)
+                    let surface_texture = SurfaceTexture::new(native_size.width, native_size.height, &window);
+
+                    // This is slow!
+                    let pixels = Pixels::new(native_size.width, native_size.height, surface_texture).unwrap();
+
+                    // Create the App (loads PNGs and SFX)
+                    app = Some(App::new(pixels, native_size));
+
+                    // TRANSITION TO GAME MODE
+                    window.set_decorations(true);
+                    window.set_cursor_visible(false);
+                    window.set_visible(true); // Show the window after loading is complete
+
+                    last_time = std::time::Instant::now();
+                    println!("Load complete. Entering game loop.");
+                }
+
+                // NORMAL UPDATE
+                if let Some(ref mut game) = app {
+                    let now = std::time::Instant::now();
+                    let dt = now.duration_since(last_time).as_secs_f32();
+                    last_time = now;
+
+                    game.update(dt);
+                    window.request_redraw();
+                }
             }
 
             Event::RedrawRequested(_) => {
-                app.draw();
+                if let Some(ref mut game) = app {
+                    game.draw();
+                }
+            }
+
+            Event::WindowEvent { event: WindowEvent::Resized(new_size), .. } => {
+                if let Some(ref mut game) = app {
+                    let _ = game.pixels.resize_surface(new_size.width, new_size.height);
+                }
             }
 
             Event::WindowEvent { event, .. } => {
-                app.input.update(&event);
+                if let Some(ref mut game) = app {
+                    game.input.update(&event);
+                }
             }
             _ => {}
         }

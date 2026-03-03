@@ -205,3 +205,7 @@ The logic of bombs and colisions was leaked to app. App was depending on particu
 --------------------------------
 
 Prompt: I would like to have starting 2 divers at wave 4.
+
+--------------------------------
+
+Prompt: When App is created in creates Pixels instance and then I draw on a frame from pixes. From the architectural point of view, is creating surface and pixel inside of App make sense? Or maybe it should be created in main and passed to App? Also, creating pixels is extremly slow. Can you move the creation of pixels to main.rs and create app instance later. And pass pixels to App as an arguement?

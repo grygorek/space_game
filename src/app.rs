@@ -27,10 +27,9 @@ use std::io::Cursor;
 use crate::input::InputState;
 use crate::rng::SimpleRng;
 use crate::stars::{draw_star, generate_stars, update_stars, Star};
-use pixels::{Pixels, SurfaceTexture};
+use pixels::{Pixels};
 use winit::dpi::PhysicalSize;
 use winit::event::VirtualKeyCode;
-use winit::window::Window;
 
 // Asset Constants
 static SHIP_PNG: &[u8] = include_bytes!("../png/ship.png");
@@ -42,7 +41,6 @@ static SFX_EXPLOSION: &[u8] = include_bytes!("../sfx/explosion.wav");
 static SFX_OVERHEAT: &[u8] = include_bytes!("../sfx/Metal_Click.wav");
 
 pub struct App {
-    pub window: Window,
     pub pixels: Pixels,
     pub size: PhysicalSize<u32>,
     pub input: InputState,
@@ -70,9 +68,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(window: Window, size: PhysicalSize<u32>) -> Self {
-        let surface_texture = SurfaceTexture::new(size.width, size.height, &window);
-        let pixels = Pixels::new(size.width, size.height, surface_texture).unwrap();
+    pub fn new(pixels: Pixels, size: PhysicalSize<u32>) -> Self {
         let mut rng = SimpleRng::seed_from_instant();
 
         // Load Sprites
@@ -120,7 +116,6 @@ impl App {
         let (stream, stream_handle) = OutputStream::try_default().unwrap();
 
         Self {
-            window,
             pixels,
             size,
             rng,
