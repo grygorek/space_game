@@ -176,7 +176,7 @@ impl App {
 
         // Cycle behavior: Every 3rd wave is a Swoop
         self.current_wave = if self.wave_count % 3 == 0 {
-            Box::new(SwoopWave::new())
+            Box::new(SwoopWave::new(self.wave_count))
         } else {
             Box::new(ClassicWave::new(self.wave_count))
         };

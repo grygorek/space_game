@@ -215,4 +215,9 @@ Prompt: I like the phase shift, I like the width oscilation.
 Prompt: Eliminate the dead zone. Player can sit in the center and just shoot.
 
 Prompt: Add divers. There will be two attacks of the divers. One will be that when the formation is descending, a random enemy will not keep with formation but kamikaze down at the player. If surwived will come back at the tail of the formation.
+
 Prompt: Almost good. When the formation comes down, the enemies are aligned and it is easy to shoot. The should spread more when they are coming down (at max streaches of left or right)
+
+Prompt: Looking good. I tried too play and efinitely waiting for the tunel at edges is a kill zone. hard to survive. However, back to the divers. The diver is extremely fast. But also I think the return to formation is not smooth.
+
+Prompt: Nice one! But the return is lightning fast. Make it slower
