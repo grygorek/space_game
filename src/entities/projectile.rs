@@ -28,8 +28,8 @@ pub struct Projectile {
 }
 
 impl Collidable for Projectile {
-    fn pos(&self) -> (u32, i32) {
-        (self.x as u32, self.y as i32)
+    fn pos(&self) -> (f32, f32) {
+        (self.x, self.y)
     }
     fn set_active(&mut self, active: bool) {
         self.active = active;

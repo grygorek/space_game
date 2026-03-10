@@ -25,7 +25,7 @@ pub mod ship;
 pub mod projectile;
 
 pub trait Collidable {
-    fn pos(&self) -> (u32, i32);
+    fn pos(&self) -> (f32, f32);
     fn set_active(&mut self, active: bool);
     fn is_active(&self) -> bool;
 
@@ -34,10 +34,10 @@ pub trait Collidable {
         let (ax, ay) = self.pos();
         let (bx, by) = other.pos();
 
-        ax < bx + other_s.width
-            && ax + self_s.width > bx
-            && ay < by + other_s.height as i32
-            && ay + self_s.height as i32 > by
+        ax < bx + other_s.width as f32
+            && ax + self_s.width as f32 > bx
+            && ay < by + other_s.height as f32
+            && ay + self_s.height as f32 > by
     }
 }
 

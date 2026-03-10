@@ -97,11 +97,9 @@ impl App {
         }
 
         let ship = Ship {
-            x: (size.width / 2) - (sprites[0].width / 2),
-            y: size.height - (size.height / 5),
+            x: (size.width / 2 - sprites[0].width / 2) as f32,
+            y: (size.height - size.height / 5) as f32,
             speed: 600.0,
-            remain_x: 0.0,
-            remain_y: 0.0,
             sprite_idx: 0,
             active: true,
             heat: 0.0,
@@ -213,8 +211,8 @@ impl App {
 
                     self.score += if enemy.is_diving { 5 } else { 1 };
 
-                    beam.y = -1000;
-                    beam_explosions.push((enemy.x as u32 + e_w / 2, enemy.y as u32 + e_h / 2));
+                    beam.y = -1000.0;
+                    beam_explosions.push(((enemy.x + e_w as f32 / 2.0) as u32, (enemy.y + e_h as f32 / 2.0) as u32));
                     play_explosion = true;
 
                     self.current_wave.on_enemy_killed();
@@ -232,8 +230,8 @@ impl App {
                 &self.sprites[0], // Ship sprite
             ) {
                 self.ship.active = false;
-                let center_x = self.ship.x + (self.sprites[0].width / 2);
-                let center_y = self.ship.y + (self.sprites[0].height / 2);
+                let center_x = (self.ship.x + self.sprites[0].width as f32 / 2.0) as u32;
+                let center_y = (self.ship.y + self.sprites[0].height as f32 / 2.0) as u32;
                 self.spawn_explosion(center_x, center_y);
                 self.play_sfx(self.sfx_explosion);
             }
@@ -244,7 +242,7 @@ impl App {
             for enemy in self.enemies.iter().filter(|e| e.active) {
                 if enemy.collides_with(&self.ship, &self.sprites[2], &self.sprites[0]) {
                     self.ship.active = false;
-                    self.spawn_explosion(sx + s_w / 2, sy + s_h / 2);
+                    self.spawn_explosion((sx + s_w as f32 / 2.0) as u32, (sy + s_h as f32 / 2.0) as u32);
                     self.play_sfx(self.sfx_explosion);
                     break;
                 }
@@ -261,8 +259,8 @@ impl App {
 
     pub fn reset(&mut self) {
         self.ship.active = true;
-        self.ship.x = (self.size.width / 2) - (self.sprites[0].width / 2);
-        self.ship.y = self.size.height - (self.size.height / 5);
+        self.ship.x = (self.size.width / 2 - self.sprites[0].width / 2) as f32;
+        self.ship.y = (self.size.height - self.size.height / 5) as f32;
         self.ship.heat = 0.0;
         self.ship.is_overheated = false;
 
@@ -279,12 +277,9 @@ impl App {
     fn update_beams(&mut self, dt: f32) {
         let b_h = self.sprites[1].height;
         for beam in self.beams.iter_mut() {
-            beam.remain_y -= 1000.0 * dt;
-            let dy = beam.remain_y as i32;
-            beam.y += dy;
-            beam.remain_y -= dy as f32;
+            beam.y -= 1000.0 * dt;
         }
-        self.beams.retain(|b| b.y + (b_h as i32) > 0);
+        self.beams.retain(|b| b.y + b_h as f32 > 0.0);
     }
 
     fn update_particles(&mut self, dt: f32) {
@@ -364,7 +359,7 @@ impl App {
 
     fn draw_beams(frame: &mut [u8], width: u32, height: u32, beams: &[Beam], sprite: &Sprite) {
         for b in beams {
-            draw_sprite(frame, width, height, b.x as i32, b.y, &sprite.pixels, sprite.width, sprite.height);
+            draw_sprite(frame, width, height, b.x as i32, b.y as i32, &sprite.pixels, sprite.width, sprite.height);
         }
     }
 
@@ -386,9 +381,8 @@ impl App {
         let s = &self.sprites[0];
         let b = &self.sprites[1];
         self.beams.push(Beam {
-            x: self.ship.x + (s.width / 2) - (b.width / 2),
-            y: self.ship.y as i32 - b.height as i32,
-            remain_y: 0.0,
+            x: self.ship.x + s.width as f32 / 2.0 - b.width as f32 / 2.0,
+            y: self.ship.y - b.height as f32,
             sprite_idx: 1,
         });
 

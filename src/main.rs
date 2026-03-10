@@ -99,7 +99,7 @@ fn main() {
                 // NORMAL UPDATE
                 if let Some(ref mut game) = app {
                     let now = std::time::Instant::now();
-                    let dt = now.duration_since(last_time).as_secs_f32();
+                    let dt = now.duration_since(last_time).as_secs_f32().min(0.05);
                     last_time = now;
 
                     game.update(dt);

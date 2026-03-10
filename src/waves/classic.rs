@@ -218,7 +218,7 @@ impl ClassicWave {
             enemy.x = diver.pivot_x + diver.current_angle.cos() * diver.radius;
             enemy.y = diver.pivot_y + diver.current_angle.sin() * diver.radius;
 
-            if !diver.bomb_dropped && enemy.y > 400.0 {
+            if !diver.bomb_dropped && enemy.y > height as f32 * 0.3 {
                 let vx = -diver.radius * diver.angular_velocity * diver.current_angle.sin();
                 self.bombs.push(Projectile { x: enemy.x + 16.0, y: enemy.y + 20.0, vx: vx * 0.4, active: true });
                 diver.bomb_dropped = true;

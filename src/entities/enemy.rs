@@ -30,9 +30,8 @@ pub struct Enemy {
 }
 
 impl Collidable for Enemy {
-    fn pos(&self) -> (u32, i32) {
-        // Casting to handle the switch from f32 movement to integer pixels
-        (self.x as u32, self.y as i32)
+    fn pos(&self) -> (f32, f32) {
+        (self.x, self.y)
     }
 
     fn set_active(&mut self, active: bool) {
