@@ -27,7 +27,7 @@ use std::io::Cursor;
 use crate::input::InputState;
 use crate::rng::SimpleRng;
 use crate::stars::{draw_star, generate_stars, update_stars, Star};
-use pixels::{Pixels};
+use pixels::Pixels;
 use winit::dpi::PhysicalSize;
 use winit::event::VirtualKeyCode;
 
@@ -40,11 +40,19 @@ static SFX_SHOT: &[u8] = include_bytes!("../sfx/laser1.wav");
 static SFX_EXPLOSION: &[u8] = include_bytes!("../sfx/explosion.wav");
 static SFX_OVERHEAT: &[u8] = include_bytes!("../sfx/Metal_Click.wav");
 
+#[derive(PartialEq)]
+pub enum GameState {
+    StartScreen,
+    Playing,
+    GameOver,
+}
+
 pub struct App {
     pub pixels: Pixels,
     pub size: PhysicalSize<u32>,
     pub input: InputState,
     pub score: u32,
+    pub state: GameState,
 
     // Entities
     ship: Ship,
@@ -71,29 +79,18 @@ impl App {
     pub fn new(pixels: Pixels, size: PhysicalSize<u32>) -> Self {
         let mut rng = SimpleRng::seed_from_instant();
 
-        // Load Sprites
-        // 1. Update the array to include BOMB_PNG
         let image_data = [SHIP_PNG, BEAM_PNG, ENEMY1_PNG, BOMB_PNG];
         let mut sprites = Vec::new();
 
         for (i, data) in image_data.iter().enumerate() {
             let img = image::load_from_memory(data).unwrap();
-
-            let resize_scale = 20;
-            let (final_width, final_height, final_pixels) = if i == 3 {
-                let resized = img.resize(
-                    img.width() / resize_scale,
-                    img.height() / resize_scale,
-                    image::imageops::FilterType::Nearest,
-                );
-                let rgba = resized.to_rgba8();
-                (rgba.width(), rgba.height(), rgba.into_raw())
+            let (w, h, pix) = if i == 3 {
+                let res = img.resize(img.width() / 20, img.height() / 20, image::imageops::FilterType::Nearest);
+                (res.width(), res.height(), res.to_rgba8().into_raw())
             } else {
-                let rgba = img.to_rgba8();
-                (rgba.width(), rgba.height(), rgba.into_raw())
+                (img.width(), img.height(), img.to_rgba8().into_raw())
             };
-
-            sprites.push(Sprite { width: final_width, height: final_height, pixels: final_pixels });
+            sprites.push(Sprite { width: w, height: h, pixels: pix });
         }
 
         let ship = Ship {
@@ -106,11 +103,6 @@ impl App {
             is_overheated: false,
         };
 
-        let wave_count = 1;
-        let current_wave: Box<dyn Wave> = Box::new(ClassicWave::new(wave_count));
-        let enemies = current_wave.deploy(size.width, size.height);
-
-        let stars = generate_stars(&mut rng, size);
         let (stream, stream_handle) = OutputStream::try_default().unwrap();
 
         Self {
@@ -119,14 +111,15 @@ impl App {
             rng,
             input: InputState::new(),
             score: 0,
+            state: GameState::StartScreen,
             ship,
-            enemies,
-            current_wave,
-            wave_count,
+            enemies: Vec::new(),
+            current_wave: Box::new(ClassicWave::new(1)),
+            wave_count: 1,
             sprites,
             beams: Vec::new(),
             particles: Vec::new(),
-            stars,
+            stars: generate_stars(&mut rng, size),
             _stream: stream,
             stream_handle,
             sfx_shot: SFX_SHOT,
@@ -135,39 +128,157 @@ impl App {
         }
     }
 
+    // --- MAIN LOOP ---
+
     pub fn update(&mut self, dt: f32) {
+        update_stars(&mut self.stars, &mut self.rng, self.size, dt);
+
+        match self.state {
+            GameState::StartScreen => self.update_start_screen(),
+            GameState::Playing => self.update_playing(dt),
+            GameState::GameOver => self.update_game_over(),
+        }
+
+        self.input.clear_just_pressed();
+    }
+
+    pub fn draw(&mut self) {
+        let (w, h) = (self.size.width, self.size.height);
+        let frame = self.pixels.frame_mut();
+        frame.fill(0);
+
+        // Draw background stars
+        Self::draw_background(frame, w, h, &self.stars);
+
+        match self.state {
+            GameState::StartScreen => {
+                Self::draw_start_menu(frame, w, h, &self.ship, &self.sprites);
+            }
+            GameState::Playing | GameState::GameOver => {
+                Self::draw_gameplay_entities(
+                    frame,
+                    w,
+                    h,
+                    &self.enemies,
+                    &self.beams,
+                    &self.particles,
+                    &self.ship,
+                    &self.sprites,
+                    &*self.current_wave,
+                );
+
+                Self::draw_hud(frame, w, h, self.ship.heat, self.ship.is_overheated, self.score);
+
+                if self.state == GameState::GameOver {
+                    Self::draw_game_over_overlay(frame, w, h);
+                }
+            }
+        }
+
+        self.pixels.render().unwrap();
+    }
+
+    // --- UPDATE HELPERS ---
+
+    fn update_start_screen(&mut self) {
+        if self.input.was_key_pressed(VirtualKeyCode::Space) {
+            self.reset();
+            self.state = GameState::Playing;
+        }
+    }
+
+    fn update_playing(&mut self, dt: f32) {
         if self.input.was_key_pressed(VirtualKeyCode::R) {
             self.reset();
             return;
         }
 
-        update_stars(&mut self.stars, &mut self.rng, self.size, dt);
-
-        if self.ship.is_active() {
-            let s_img = &self.sprites[self.ship.sprite_idx];
-            self.ship.update(&self.input, self.size, s_img.width, s_img.height, dt);
-
-            if self.input.was_key_pressed(VirtualKeyCode::Space) {
-                if self.ship.try_fire() {
-                    self.fire_beam();
-                } else {
-                    self.play_sfx(self.sfx_overheat);
-                }
-            }
-        }
-
+        self.handle_player_input(dt);
         self.update_enemies(dt);
         self.update_beams(dt);
         self.update_particles(dt);
         self.process_collisions();
 
-        // Wave Transition Logic
         if self.current_wave.is_extinct(&self.enemies) {
             self.transition_wave();
         }
 
-        self.input.clear_just_pressed();
+        if !self.ship.is_active() {
+            self.state = GameState::GameOver;
+        }
     }
+
+    fn update_game_over(&mut self) {
+        if self.input.was_key_pressed(VirtualKeyCode::R) {
+            self.reset();
+            self.state = GameState::Playing;
+        }
+    }
+
+    fn handle_player_input(&mut self, dt: f32) {
+        if !self.ship.active {
+            return;
+        }
+        let s_img = &self.sprites[self.ship.sprite_idx];
+        self.ship.update(&self.input, self.size, s_img.width, s_img.height, dt);
+
+        if self.input.was_key_pressed(VirtualKeyCode::Space) {
+            if self.ship.try_fire() {
+                self.fire_beam();
+            } else {
+                self.play_sfx(self.sfx_overheat);
+            }
+        }
+    }
+
+    // --- DRAW HELPERS (Associated Functions to avoid Borrow Checker issues) ---
+
+    fn draw_background(frame: &mut [u8], w: u32, h: u32, stars: &[Star]) {
+        for s in stars {
+            draw_star(frame, w, h, s);
+        }
+    }
+
+    fn draw_start_menu(frame: &mut [u8], w: u32, h: u32, ship: &Ship, sprites: &[Sprite]) {
+        let s = &sprites[ship.sprite_idx];
+        draw_sprite(frame, w, h, ship.x as i32, ship.y as i32, &s.pixels, s.width, s.height);
+
+        draw_text_centered(frame, w, h, "SPACE GAME", 8, COLOR_SCORE_GOLD);
+        draw_text(frame, w, h, (w / 2) - 150, (h / 2) + 100, "PRESS SPACE TO START", 2, COLOR_WHITE);
+    }
+
+    fn draw_gameplay_entities(
+        frame: &mut [u8],
+        w: u32,
+        h: u32,
+        enemies: &[Enemy],
+        beams: &[Beam],
+        particles: &[Particle],
+        ship: &Ship,
+        sprites: &[Sprite],
+        wave: &dyn Wave,
+    ) {
+        Self::draw_enemies(frame, w, h, enemies, &sprites[2]);
+        wave.draw_projectiles(frame, w, h, &sprites[3]);
+        Self::draw_beams(frame, w, h, beams, &sprites[1]);
+        Self::draw_particles(frame, w, h, particles);
+
+        if ship.active {
+            let s = &sprites[ship.sprite_idx];
+            draw_sprite(frame, w, h, ship.x as i32, ship.y as i32, &s.pixels, s.width, s.height);
+        }
+    }
+
+    fn draw_hud(frame: &mut [u8], w: u32, h: u32, heat: f32, is_overheated: bool, score: u32) {
+        Self::draw_ui(frame, w, h, heat, is_overheated, score);
+    }
+
+    fn draw_game_over_overlay(frame: &mut [u8], w: u32, h: u32) {
+        draw_text_centered(frame, w, h, "GAMEOVER", 10, COLOR_RED);
+        draw_text(frame, w, h, (w / 2) - 120, (h / 2) + 80, "PRESS R TO RESTART", 2, COLOR_WHITE);
+    }
+
+    // --- LOGIC HELPER FUNCTIONS ---
 
     fn transition_wave(&mut self) {
         self.wave_count += 1;
@@ -193,7 +304,7 @@ impl App {
             self.size.width,
             self.size.height,
             &self.sprites[2],
-            self.ship.x as f32,
+            self.ship.x,
         );
     }
 
@@ -222,28 +333,12 @@ impl App {
         }
 
         if self.ship.active {
-            // We pass the Ship and the Sprites (Heavy Data) into the Wave
-            // The Wave handles the "Thin Data" (Projectiles) internally
-            if self.current_wave.check_player_collision(
-                &self.ship,
-                &self.sprites[3], // Bomb sprite
-                &self.sprites[0], // Ship sprite
-            ) {
-                self.ship.active = false;
-                let center_x = (self.ship.x + self.sprites[0].width as f32 / 2.0) as u32;
-                let center_y = (self.ship.y + self.sprites[0].height as f32 / 2.0) as u32;
-                self.spawn_explosion(center_x, center_y);
-                self.play_sfx(self.sfx_explosion);
+            if self.current_wave.check_player_collision(&self.ship, &self.sprites[3], &self.sprites[0]) {
+                self.destroy_ship(s_w, s_h);
             }
-        }
-
-        if self.ship.active {
-            let (sx, sy) = (self.ship.x, self.ship.y);
             for enemy in self.enemies.iter().filter(|e| e.active) {
                 if enemy.collides_with(&self.ship, &self.sprites[2], &self.sprites[0]) {
-                    self.ship.active = false;
-                    self.spawn_explosion((sx + s_w as f32 / 2.0) as u32, (sy + s_h as f32 / 2.0) as u32);
-                    self.play_sfx(self.sfx_explosion);
+                    self.destroy_ship(s_w, s_h);
                     break;
                 }
             }
@@ -257,6 +352,12 @@ impl App {
         }
     }
 
+    fn destroy_ship(&mut self, s_w: u32, s_h: u32) {
+        self.ship.active = false;
+        self.spawn_explosion((self.ship.x + s_w as f32 / 2.0) as u32, (self.ship.y + s_h as f32 / 2.0) as u32);
+        self.play_sfx(self.sfx_explosion);
+    }
+
     pub fn reset(&mut self) {
         self.ship.active = true;
         self.ship.x = (self.size.width / 2 - self.sprites[0].width / 2) as f32;
@@ -267,11 +368,12 @@ impl App {
         self.wave_count = 1;
         self.current_wave = Box::new(ClassicWave::new(self.wave_count));
         self.enemies = self.current_wave.deploy(self.size.width, self.size.height);
-
         self.beams.clear();
         self.particles.clear();
 
         self.score = 0;
+
+        self.state = GameState::Playing;
     }
 
     fn update_beams(&mut self, dt: f32) {
@@ -291,34 +393,7 @@ impl App {
         self.particles.retain(|p| p.life > 0.0);
     }
 
-    pub fn draw(&mut self) {
-        let width = self.size.width;
-        let height = self.size.height;
-        let frame = self.pixels.frame_mut();
-        frame.fill(0);
-
-        for s in &self.stars {
-            draw_star(frame, width, height, s);
-        }
-
-        Self::draw_enemies(frame, width, height, &self.enemies, &self.sprites[2]);
-        self.current_wave.draw_projectiles(frame, width, height, &self.sprites[3]);
-        Self::draw_beams(frame, width, height, &self.beams, &self.sprites[1]);
-        Self::draw_particles(frame, width, height, &self.particles);
-
-        if self.ship.is_active() {
-            let s = &self.sprites[self.ship.sprite_idx];
-            draw_sprite(frame, width, height, self.ship.x as i32, self.ship.y as i32, &s.pixels, s.width, s.height);
-        } else {
-            draw_text_centered(frame, width, height, "GAMEOVER", 10, COLOR_RED);
-        }
-
-        Self::draw_ui(frame, width, height, self.ship.heat, self.ship.is_overheated, self.score);
-        self.pixels.render().unwrap();
-    }
-
     fn draw_ui(frame: &mut [u8], width: u32, height: u32, heat: f32, is_overheated: bool, score: u32) {
-        // Layout Constants
         let bar_w = 300;
         let bar_h = 30;
         let x = (width as i32 - bar_w as i32) / 2;
@@ -345,10 +420,7 @@ impl App {
         // 5. Draw "HEAT" Label (Centered under bar, Scale 2)
         // "HEAT" at scale 2 is roughly 70px wide
         draw_text(frame, width, height, (width / 2) - 35, (y + bar_h as i32 + 10) as u32, "HEAT", 2, COLOR_WHITE);
-
-        // 6. Draw Score (Scale 3 as requested)
-        let score_text = format!("SCORE: {}", score);
-        draw_text(frame, width, height, 20, 20, &score_text, 3, COLOR_WHITE);
+        draw_text(frame, width, height, 20, 20, &format!("SCORE: {}", score), 3, COLOR_WHITE);
     }
 
     fn draw_enemies(frame: &mut [u8], width: u32, height: u32, enemies: &[Enemy], sprite: &Sprite) {
@@ -404,9 +476,7 @@ impl App {
     }
 
     fn play_sfx(&self, data: &'static [u8]) {
-        let cursor = Cursor::new(data);
-        let source = Decoder::new(cursor).unwrap();
-        // Use play_raw to avoid creating a new Sink every time
+        let source = Decoder::new(Cursor::new(data)).unwrap();
         let _ = self.stream_handle.play_raw(source.convert_samples());
     }
 }

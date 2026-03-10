@@ -220,4 +220,16 @@ Prompt: Almost good. When the formation comes down, the enemies are aligned and 
 
 Prompt: Looking good. I tried too play and efinitely waiting for the tunel at edges is a kill zone. hard to survive. However, back to the divers. The diver is extremely fast. But also I think the return to formation is not smooth.
 
-Prompt: Nice one! But the return is lightning fast. Make it slower
+Prompt: Nice one! But the return is lightning fast. Make it slower.
+
+--------------------------------
+
+Prompt: Review the code and unify variable types (u32, i32 vs f32)
+
+--------------------------------
+
+Prompt: Please do not start the first wave immediatley. Print a text with the game name "Space Game" and "press 'space' to start". The stars and the player ship can be there. Just no wave.
+
+--------------------------------
+
+Prompt: Looking good. The functions draw and update are quiet big. Should you consider breaking code on smaller functions or you think it is ok to keep all in one place for now?
