@@ -243,3 +243,5 @@ Prompt: After the player dies, the animation of the wave, beams, etc. is frozen
 --------------------------------
 
 Prompt: If the score goes on the top score list, allow player to type 3 letter name. Add whole alphabet of glyphs.
+
+Prompt: the score board file handling can be moved to a separate file. Would that be good move?

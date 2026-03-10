@@ -25,6 +25,7 @@ use rodio::{Decoder, OutputStream, OutputStreamHandle, Source};
 use std::io::Cursor;
 
 use crate::input::InputState;
+use crate::loaderboard::Leaderboard;
 use crate::rng::SimpleRng;
 use crate::stars::{draw_star, generate_stars, update_stars, Star};
 use pixels::Pixels;
@@ -55,7 +56,7 @@ pub struct App {
     pub score: u32,
     pub state: GameState,
     pub name_input: String,
-    pub high_scores: Vec<(String, u32)>,
+    leaderboard: Leaderboard,
 
     // Entities
     ship: Ship,
@@ -116,7 +117,7 @@ impl App {
             score: 0,
             state: GameState::StartScreen,
             name_input: String::new(),
-            high_scores: Self::load_high_scores(),
+            leaderboard: Leaderboard::new(),
             ship,
             enemies: Vec::new(),
             current_wave: Box::new(ClassicWave::new(1)),
@@ -131,44 +132,6 @@ impl App {
             sfx_explosion: SFX_EXPLOSION,
             sfx_overheat: SFX_OVERHEAT,
         }
-    }
-
-    // --- FILE I/O ---
-
-    fn load_high_scores() -> Vec<(String, u32)> {
-        if let Ok(content) = std::fs::read_to_string("scores.txt") {
-            let mut scores: Vec<(String, u32)> = content
-                .lines()
-                .filter_map(|line| {
-                    let parts: Vec<&str> = line.split(':').collect();
-                    if parts.len() == 2 {
-                        let name = parts[0].to_string();
-                        let score = parts[1].parse().ok()?;
-                        Some((name, score))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            scores.sort_by(|a, b| b.1.cmp(&a.1));
-            return scores;
-        }
-        vec![
-            ("CPU".to_string(), 100),
-            ("CPU".to_string(), 50),
-            ("CPU".to_string(), 25),
-            ("CPU".to_string(), 10),
-            ("CPU".to_string(), 5),
-        ]
-    }
-
-    fn save_high_scores(&mut self) {
-        self.high_scores.push((self.name_input.to_uppercase(), self.score));
-        self.high_scores.sort_by(|a, b| b.1.cmp(&a.1));
-        self.high_scores.truncate(5);
-
-        let content = self.high_scores.iter().map(|(n, s)| format!("{}:{}", n, s)).collect::<Vec<_>>().join("\n");
-        let _ = std::fs::write("scores.txt", content);
     }
 
     // --- MAIN LOOP ---
@@ -243,7 +206,7 @@ impl App {
                     &*self.current_wave,
                     self.score,
                 );
-                Self::draw_game_over_overlay(frame, w, h, &self.high_scores);
+                Self::draw_game_over_overlay(frame, w, h, &self.leaderboard.entries);
             }
         }
 
@@ -288,8 +251,8 @@ impl App {
         }
 
         if !self.ship.active {
-            let min_high = self.high_scores.last().map(|(_, s)| *s).unwrap_or(0);
-            if self.score > min_high || self.high_scores.len() < 5 {
+            let min_high = self.leaderboard.entries.last().map(|(_, s)| *s).unwrap_or(0);
+            if self.score > min_high || self.leaderboard.entries.len() < 5 {
                 self.name_input.clear();
                 self.state = GameState::NameEntry;
             } else {
@@ -314,7 +277,7 @@ impl App {
         }
 
         if self.input.was_key_pressed(VirtualKeyCode::Return) && self.name_input.len() == 3 {
-            self.save_high_scores();
+            self.leaderboard.add_entry(self.name_input.clone(), self.score);
             self.state = GameState::GameOver;
         }
     }

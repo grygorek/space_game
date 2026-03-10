@@ -25,6 +25,7 @@ pub mod input;
 pub mod rng;
 pub mod stars;
 pub mod waves;
+pub mod loaderboard;
 
 use app::App;
 use pixels::{Pixels, SurfaceTexture};
