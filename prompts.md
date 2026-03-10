@@ -233,3 +233,13 @@ Prompt: Please do not start the first wave immediatley. Print a text with the ga
 --------------------------------
 
 Prompt: Looking good. The functions draw and update are quiet big. Should you consider breaking code on smaller functions or you think it is ok to keep all in one place for now?
+
+Prompt: Print top 5 scorrers at the game over screen.
+
+Prompt: The top scorrers are on top of the game over. Hard to see. Please move the list below the game over text
+
+Prompt: After the player dies, the animation of the wave, beams, etc. is frozen
+
+--------------------------------
+
+Prompt: If the score goes on the top score list, allow player to type 3 letter name. Add whole alphabet of glyphs.

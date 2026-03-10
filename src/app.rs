@@ -44,6 +44,7 @@ static SFX_OVERHEAT: &[u8] = include_bytes!("../sfx/Metal_Click.wav");
 pub enum GameState {
     StartScreen,
     Playing,
+    NameEntry,
     GameOver,
 }
 
@@ -53,6 +54,8 @@ pub struct App {
     pub input: InputState,
     pub score: u32,
     pub state: GameState,
+    pub name_input: String,
+    pub high_scores: Vec<(String, u32)>,
 
     // Entities
     ship: Ship,
@@ -112,6 +115,8 @@ impl App {
             input: InputState::new(),
             score: 0,
             state: GameState::StartScreen,
+            name_input: String::new(),
+            high_scores: Self::load_high_scores(),
             ship,
             enemies: Vec::new(),
             current_wave: Box::new(ClassicWave::new(1)),
@@ -128,14 +133,57 @@ impl App {
         }
     }
 
+    // --- FILE I/O ---
+
+    fn load_high_scores() -> Vec<(String, u32)> {
+        if let Ok(content) = std::fs::read_to_string("scores.txt") {
+            let mut scores: Vec<(String, u32)> = content
+                .lines()
+                .filter_map(|line| {
+                    let parts: Vec<&str> = line.split(':').collect();
+                    if parts.len() == 2 {
+                        let name = parts[0].to_string();
+                        let score = parts[1].parse().ok()?;
+                        Some((name, score))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            scores.sort_by(|a, b| b.1.cmp(&a.1));
+            return scores;
+        }
+        vec![
+            ("CPU".to_string(), 100),
+            ("CPU".to_string(), 50),
+            ("CPU".to_string(), 25),
+            ("CPU".to_string(), 10),
+            ("CPU".to_string(), 5),
+        ]
+    }
+
+    fn save_high_scores(&mut self) {
+        self.high_scores.push((self.name_input.to_uppercase(), self.score));
+        self.high_scores.sort_by(|a, b| b.1.cmp(&a.1));
+        self.high_scores.truncate(5);
+
+        let content = self.high_scores.iter().map(|(n, s)| format!("{}:{}", n, s)).collect::<Vec<_>>().join("\n");
+        let _ = std::fs::write("scores.txt", content);
+    }
+
     // --- MAIN LOOP ---
 
     pub fn update(&mut self, dt: f32) {
         update_stars(&mut self.stars, &mut self.rng, self.size, dt);
+        self.update_enemies(dt);
+        self.update_beams(dt);
+        self.update_particles(dt);
+        self.process_collisions();
 
         match self.state {
             GameState::StartScreen => self.update_start_screen(),
             GameState::Playing => self.update_playing(dt),
+            GameState::NameEntry => self.update_name_entry(),
             GameState::GameOver => self.update_game_over(),
         }
 
@@ -147,15 +195,14 @@ impl App {
         let frame = self.pixels.frame_mut();
         frame.fill(0);
 
-        // Draw background stars
         Self::draw_background(frame, w, h, &self.stars);
 
         match self.state {
             GameState::StartScreen => {
                 Self::draw_start_menu(frame, w, h, &self.ship, &self.sprites);
             }
-            GameState::Playing | GameState::GameOver => {
-                Self::draw_gameplay_entities(
+            GameState::Playing => {
+                Self::draw_gameplay_layers(
                     frame,
                     w,
                     h,
@@ -165,17 +212,58 @@ impl App {
                     &self.ship,
                     &self.sprites,
                     &*self.current_wave,
+                    self.score,
                 );
-
-                Self::draw_hud(frame, w, h, self.ship.heat, self.ship.is_overheated, self.score);
-
-                if self.state == GameState::GameOver {
-                    Self::draw_game_over_overlay(frame, w, h);
-                }
+            }
+            GameState::NameEntry => {
+                Self::draw_gameplay_layers(
+                    frame,
+                    w,
+                    h,
+                    &self.enemies,
+                    &self.beams,
+                    &self.particles,
+                    &self.ship,
+                    &self.sprites,
+                    &*self.current_wave,
+                    self.score,
+                );
+                Self::draw_name_entry_overlay(frame, w, h, &self.name_input);
+            }
+            GameState::GameOver => {
+                Self::draw_gameplay_layers(
+                    frame,
+                    w,
+                    h,
+                    &self.enemies,
+                    &self.beams,
+                    &self.particles,
+                    &self.ship,
+                    &self.sprites,
+                    &*self.current_wave,
+                    self.score,
+                );
+                Self::draw_game_over_overlay(frame, w, h, &self.high_scores);
             }
         }
 
         self.pixels.render().unwrap();
+    }
+
+    fn draw_gameplay_layers(
+        frame: &mut [u8],
+        w: u32,
+        h: u32,
+        enemies: &[Enemy],
+        beams: &[Beam],
+        particles: &[Particle],
+        ship: &Ship,
+        sprites: &[Sprite],
+        wave: &dyn Wave,
+        score: u32,
+    ) {
+        Self::draw_gameplay_entities(frame, w, h, enemies, beams, particles, ship, sprites, wave);
+        Self::draw_hud(frame, w, h, ship.heat, ship.is_overheated, score);
     }
 
     // --- UPDATE HELPERS ---
@@ -194,16 +282,39 @@ impl App {
         }
 
         self.handle_player_input(dt);
-        self.update_enemies(dt);
-        self.update_beams(dt);
-        self.update_particles(dt);
-        self.process_collisions();
 
         if self.current_wave.is_extinct(&self.enemies) {
             self.transition_wave();
         }
 
-        if !self.ship.is_active() {
+        if !self.ship.active {
+            let min_high = self.high_scores.last().map(|(_, s)| *s).unwrap_or(0);
+            if self.score > min_high || self.high_scores.len() < 5 {
+                self.name_input.clear();
+                self.state = GameState::NameEntry;
+            } else {
+                self.state = GameState::GameOver;
+            }
+        }
+    }
+
+    fn update_name_entry(&mut self) {
+        for key_code in VirtualKeyCode::A as u32..=VirtualKeyCode::Z as u32 {
+            let vk: VirtualKeyCode = unsafe { std::mem::transmute(key_code) };
+            if self.input.was_key_pressed(vk) {
+                if self.name_input.len() < 3 {
+                    let letter = (b'A' + (key_code - VirtualKeyCode::A as u32) as u8) as char;
+                    self.name_input.push(letter);
+                }
+            }
+        }
+
+        if self.input.was_key_pressed(VirtualKeyCode::Back) {
+            self.name_input.pop();
+        }
+
+        if self.input.was_key_pressed(VirtualKeyCode::Return) && self.name_input.len() == 3 {
+            self.save_high_scores();
             self.state = GameState::GameOver;
         }
     }
@@ -231,7 +342,7 @@ impl App {
         }
     }
 
-    // --- DRAW HELPERS (Associated Functions to avoid Borrow Checker issues) ---
+    // --- DRAW HELPERS ---
 
     fn draw_background(frame: &mut [u8], w: u32, h: u32, stars: &[Star]) {
         for s in stars {
@@ -242,9 +353,29 @@ impl App {
     fn draw_start_menu(frame: &mut [u8], w: u32, h: u32, ship: &Ship, sprites: &[Sprite]) {
         let s = &sprites[ship.sprite_idx];
         draw_sprite(frame, w, h, ship.x as i32, ship.y as i32, &s.pixels, s.width, s.height);
-
         draw_text_centered(frame, w, h, "SPACE GAME", 8, COLOR_SCORE_GOLD);
         draw_text(frame, w, h, (w / 2) - 150, (h / 2) + 100, "PRESS SPACE TO START", 2, COLOR_WHITE);
+    }
+
+    fn draw_name_entry_overlay(frame: &mut [u8], w: u32, h: u32, name: &str) {
+        draw_text_centered(frame, w, h, "NEW RECORD!", 6, COLOR_SCORE_GOLD);
+        let display = format!("{}_", name);
+        draw_text(frame, w, h, (w / 2) - 60, (h / 3 * 2) as u32, &display, 8, COLOR_WHITE);
+        draw_text(frame, w, h, (w / 2) - 180, (h / 3 * 2) as u32 + 100, "TYPE 3 LETTERS & PRESS ENTER", 2, COLOR_WHITE);
+    }
+
+    fn draw_game_over_overlay(frame: &mut [u8], w: u32, h: u32, scores: &[(String, u32)]) {
+        draw_text_centered(frame, w, h, "GAMEOVER", 10, COLOR_RED);
+        let list_start_y = (h as i32 / 3 * 2) - 40;
+        draw_text(frame, w, h, (w / 2) - 100, list_start_y as u32, "--- TOP 5 ---", 2, COLOR_SCORE_GOLD);
+
+        for (i, (name, score)) in scores.iter().enumerate() {
+            let y_pos = (list_start_y + 40) + (i as i32 * 35);
+            let color = if i == 0 { COLOR_SCORE_GOLD } else { COLOR_WHITE };
+            let entry = format!("#{} {} .... {:>6}", i + 1, name, score);
+            draw_text(frame, w, h, (w / 2) - 130, y_pos as u32, &entry, 2, color);
+        }
+        draw_text(frame, w, h, (w / 2) - 130, h - 80, "PRESS R TO RESTART", 2, COLOR_WHITE);
     }
 
     fn draw_gameplay_entities(
@@ -273,12 +404,7 @@ impl App {
         Self::draw_ui(frame, w, h, heat, is_overheated, score);
     }
 
-    fn draw_game_over_overlay(frame: &mut [u8], w: u32, h: u32) {
-        draw_text_centered(frame, w, h, "GAMEOVER", 10, COLOR_RED);
-        draw_text(frame, w, h, (w / 2) - 120, (h / 2) + 80, "PRESS R TO RESTART", 2, COLOR_WHITE);
-    }
-
-    // --- LOGIC HELPER FUNCTIONS ---
+    // --- LOGIC HELPERS ---
 
     fn transition_wave(&mut self) {
         self.wave_count += 1;
@@ -311,7 +437,6 @@ impl App {
     fn process_collisions(&mut self) {
         let (s_w, s_h) = (self.sprites[0].width, self.sprites[0].height);
         let (e_w, e_h) = (self.sprites[2].width, self.sprites[2].height);
-
         let mut play_explosion = false;
         let mut beam_explosions = Vec::new();
 
@@ -319,13 +444,12 @@ impl App {
             for enemy in self.enemies.iter_mut().filter(|e| e.active) {
                 if beam.collides_with(enemy, &self.sprites[1], &self.sprites[2]) {
                     enemy.active = false;
-
-                    self.score += if enemy.is_diving { 5 } else { 1 };
-
+                    if self.state == GameState::Playing {
+                        self.score += if enemy.is_diving { 5 } else { 1 };
+                    }
                     beam.y = -1000.0;
                     beam_explosions.push(((enemy.x + e_w as f32 / 2.0) as u32, (enemy.y + e_h as f32 / 2.0) as u32));
                     play_explosion = true;
-
                     self.current_wave.on_enemy_killed();
                     break;
                 }
@@ -366,7 +490,7 @@ impl App {
         self.ship.is_overheated = false;
 
         self.wave_count = 1;
-        self.current_wave = Box::new(ClassicWave::new(self.wave_count));
+        self.current_wave = Box::new(ClassicWave::new(1));
         self.enemies = self.current_wave.deploy(self.size.width, self.size.height);
         self.beams.clear();
         self.particles.clear();
