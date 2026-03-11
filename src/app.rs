@@ -21,11 +21,10 @@
 use crate::drawing::*;
 use crate::entities::{beam::Beam, enemy::Enemy, particle::Particle, ship::Ship, Collidable, Sprite};
 use crate::waves::{classic::ClassicWave, swoop::SwoopWave, Wave};
-use rodio::{Decoder, OutputStream, OutputStreamHandle, Source};
-use std::io::Cursor;
 
+use crate::audio::AudioController;
 use crate::input::InputState;
-use crate::loaderboard::Leaderboard;
+use crate::leaderboard::Leaderboard;
 use crate::rng::SimpleRng;
 use crate::stars::{draw_star, generate_stars, update_stars, Star};
 use pixels::Pixels;
@@ -69,9 +68,7 @@ pub struct App {
     rng: SimpleRng,
     sprites: Vec<Sprite>,
 
-    // Audio handle must stay alive for the duration of the app
-    _stream: OutputStream,
-    stream_handle: OutputStreamHandle,
+    audio_controller: AudioController,
 
     // We store the raw bytes of the sounds to "play" them instantly
     sfx_shot: &'static [u8],
@@ -107,8 +104,6 @@ impl App {
             is_overheated: false,
         };
 
-        let (stream, stream_handle) = OutputStream::try_default().unwrap();
-
         Self {
             pixels,
             size,
@@ -126,11 +121,10 @@ impl App {
             beams: Vec::new(),
             particles: Vec::new(),
             stars: generate_stars(&mut rng, size),
-            _stream: stream,
-            stream_handle,
             sfx_shot: SFX_SHOT,
             sfx_explosion: SFX_EXPLOSION,
             sfx_overheat: SFX_OVERHEAT,
+            audio_controller: AudioController::new(),
         }
     }
 
@@ -300,7 +294,7 @@ impl App {
             if self.ship.try_fire() {
                 self.fire_beam();
             } else {
-                self.play_sfx(self.sfx_overheat);
+                self.audio_controller.play_sfx(self.sfx_overheat);
             }
         }
     }
@@ -435,14 +429,14 @@ impl App {
             self.spawn_explosion(hx, hy);
         }
         if play_explosion {
-            self.play_sfx(self.sfx_explosion);
+            self.audio_controller.play_sfx(self.sfx_explosion);
         }
     }
 
     fn destroy_ship(&mut self, s_w: u32, s_h: u32) {
         self.ship.active = false;
         self.spawn_explosion((self.ship.x + s_w as f32 / 2.0) as u32, (self.ship.y + s_h as f32 / 2.0) as u32);
-        self.play_sfx(self.sfx_explosion);
+        self.audio_controller.play_sfx(self.sfx_explosion);
     }
 
     pub fn reset(&mut self) {
@@ -545,7 +539,7 @@ impl App {
             sprite_idx: 1,
         });
 
-        self.play_sfx(self.sfx_shot);
+        self.audio_controller.play_sfx(self.sfx_shot);
     }
 
     fn spawn_explosion(&mut self, x: u32, y: u32) {
@@ -560,10 +554,5 @@ impl App {
                 life: 0.4 + (self.rng.next_u32() % 300) as f32 / 1000.0,
             });
         }
-    }
-
-    fn play_sfx(&self, data: &'static [u8]) {
-        let source = Decoder::new(Cursor::new(data)).unwrap();
-        let _ = self.stream_handle.play_raw(source.convert_samples());
     }
 }
