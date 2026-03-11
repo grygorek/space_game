@@ -28,6 +28,7 @@ use crate::input::InputState;
 use crate::leaderboard::Leaderboard;
 use crate::rng::SimpleRng;
 use crate::stars::{draw_star, generate_stars, update_stars, Star};
+use crate::ui;
 use pixels::Pixels;
 use winit::dpi::PhysicalSize;
 use winit::event::VirtualKeyCode;
@@ -123,75 +124,38 @@ impl App {
         let frame = self.pixels.frame_mut();
         frame.fill(0);
 
+        // 1. Static Background
         Self::draw_background(frame, w, h, &self.stars);
 
+        // 2. Entities (Always drawn for most states)
+        if self.state != GameState::StartScreen {
+            Self::draw_gameplay_entities(
+                frame,
+                w,
+                h,
+                &self.enemies,
+                &self.beams,
+                &self.particles,
+                &self.ship,
+                &self.assets.sprites,
+                &*self.current_wave,
+            );
+            ui::draw_hud(frame, w, h, self.ship.heat, self.ship.is_overheated, self.score);
+        }
+
+        // 3. State-specific Overlays
         match self.state {
             GameState::StartScreen => {
-                Self::draw_start_menu(frame, w, h, &self.ship, &self.assets.sprites);
+                let s = self.assets.ship();
+                draw_sprite(frame, w, h, self.ship.x as i32, self.ship.y as i32, &s.pixels, s.width, s.height);
+                ui::draw_start_menu(frame, w, h);
             }
-            GameState::Playing => {
-                Self::draw_gameplay_layers(
-                    frame,
-                    w,
-                    h,
-                    &self.enemies,
-                    &self.beams,
-                    &self.particles,
-                    &self.ship,
-                    &self.assets.sprites,
-                    &*self.current_wave,
-                    self.score,
-                );
-            }
-            GameState::NameEntry => {
-                Self::draw_gameplay_layers(
-                    frame,
-                    w,
-                    h,
-                    &self.enemies,
-                    &self.beams,
-                    &self.particles,
-                    &self.ship,
-                    &self.assets.sprites,
-                    &*self.current_wave,
-                    self.score,
-                );
-                Self::draw_name_entry_overlay(frame, w, h, &self.name_input);
-            }
-            GameState::GameOver => {
-                Self::draw_gameplay_layers(
-                    frame,
-                    w,
-                    h,
-                    &self.enemies,
-                    &self.beams,
-                    &self.particles,
-                    &self.ship,
-                    &self.assets.sprites,
-                    &*self.current_wave,
-                    self.score,
-                );
-                Self::draw_game_over_overlay(frame, w, h, &self.leaderboard.entries);
-            }
+            GameState::NameEntry => ui::draw_name_entry_overlay(frame, w, h, &self.name_input),
+            GameState::GameOver => ui::draw_game_over_overlay(frame, w, h, &self.leaderboard.entries),
+            GameState::Playing => {} // HUD already drawn above
         }
 
         self.pixels.render().unwrap();
-    }
-
-    fn draw_gameplay_layers(
-        frame: &mut [u8],
-        w: u32,
-        h: u32,
-        enemies: &[Enemy],
-        beams: &[Beam],
-        particles: &[Particle],
-        ship: &Ship,
-        sprites: &[Sprite],
-        wave: &dyn Wave,
-        score: u32,
-    ) {
-        Self::draw_gameplay_entities(frame, w, h, enemies, beams, particles, ship, sprites, wave);
-        Self::draw_hud(frame, w, h, ship.heat, ship.is_overheated, score);
     }
 
     // --- UPDATE HELPERS ---
@@ -278,34 +242,6 @@ impl App {
         }
     }
 
-    fn draw_start_menu(frame: &mut [u8], w: u32, h: u32, ship: &Ship, sprites: &[Sprite]) {
-        let s = &sprites[ship.sprite_idx];
-        draw_sprite(frame, w, h, ship.x as i32, ship.y as i32, &s.pixels, s.width, s.height);
-        draw_text_centered(frame, w, h, "SPACE GAME", 8, COLOR_SCORE_GOLD);
-        draw_text(frame, w, h, (w / 2) - 150, (h / 2) + 100, "PRESS SPACE TO START", 2, COLOR_WHITE);
-    }
-
-    fn draw_name_entry_overlay(frame: &mut [u8], w: u32, h: u32, name: &str) {
-        draw_text_centered(frame, w, h, "NEW RECORD!", 6, COLOR_SCORE_GOLD);
-        let display = format!("{}_", name);
-        draw_text(frame, w, h, (w / 2) - 60, (h / 3 * 2) as u32, &display, 8, COLOR_WHITE);
-        draw_text(frame, w, h, (w / 2) - 180, (h / 3 * 2) as u32 + 100, "TYPE 3 LETTERS & PRESS ENTER", 2, COLOR_WHITE);
-    }
-
-    fn draw_game_over_overlay(frame: &mut [u8], w: u32, h: u32, scores: &[(String, u32)]) {
-        draw_text_centered(frame, w, h, "GAMEOVER", 10, COLOR_RED);
-        let list_start_y = (h as i32 / 3 * 2) - 40;
-        draw_text(frame, w, h, (w / 2) - 100, list_start_y as u32, "--- TOP 5 ---", 2, COLOR_SCORE_GOLD);
-
-        for (i, (name, score)) in scores.iter().enumerate() {
-            let y_pos = (list_start_y + 40) + (i as i32 * 35);
-            let color = if i == 0 { COLOR_SCORE_GOLD } else { COLOR_WHITE };
-            let entry = format!("#{} {} .... {:>6}", i + 1, name, score);
-            draw_text(frame, w, h, (w / 2) - 130, y_pos as u32, &entry, 2, color);
-        }
-        draw_text(frame, w, h, (w / 2) - 130, h - 80, "PRESS R TO RESTART", 2, COLOR_WHITE);
-    }
-
     fn draw_gameplay_entities(
         frame: &mut [u8],
         w: u32,
@@ -326,10 +262,6 @@ impl App {
             let s = &sprites[ship.sprite_idx];
             draw_sprite(frame, w, h, ship.x as i32, ship.y as i32, &s.pixels, s.width, s.height);
         }
-    }
-
-    fn draw_hud(frame: &mut [u8], w: u32, h: u32, heat: f32, is_overheated: bool, score: u32) {
-        Self::draw_ui(frame, w, h, heat, is_overheated, score);
     }
 
     // --- LOGIC HELPERS ---
@@ -443,36 +375,6 @@ impl App {
             p.life -= dt;
         }
         self.particles.retain(|p| p.life > 0.0);
-    }
-
-    fn draw_ui(frame: &mut [u8], width: u32, height: u32, heat: f32, is_overheated: bool, score: u32) {
-        let bar_w = 300;
-        let bar_h = 30;
-        let x = (width as i32 - bar_w as i32) / 2;
-        let y = 20;
-
-        // 1. Draw Outline (Thick 4px to match Scale 3 text)
-        let outline_color = if is_overheated { COLOR_OVERHEAT_RED } else { COLOR_GRAY_LIGHT };
-        draw_rect_outline(frame, width, height, x - 4, y - 4, bar_w + 8, bar_h + 8, 4, outline_color);
-
-        // 2. Draw Background
-        draw_rect(frame, width, height, x, y, bar_w, bar_h, COLOR_GRAY_DARK);
-
-        // 3. Draw Heat Fill
-        let fill_w = (heat * bar_w as f32) as u32;
-        let fill_color = if is_overheated {
-            COLOR_OVERHEAT_RED
-        } else if heat > 0.5 {
-            COLOR_HEAT_ORANGE
-        } else {
-            COLOR_HEALTH_GREEN
-        };
-        draw_rect(frame, width, height, x, y, fill_w, bar_h, fill_color);
-
-        // 5. Draw "HEAT" Label (Centered under bar, Scale 2)
-        // "HEAT" at scale 2 is roughly 70px wide
-        draw_text(frame, width, height, (width / 2) - 35, (y + bar_h as i32 + 10) as u32, "HEAT", 2, COLOR_WHITE);
-        draw_text(frame, width, height, 20, 20, &format!("SCORE: {}", score), 3, COLOR_WHITE);
     }
 
     fn draw_enemies(frame: &mut [u8], width: u32, height: u32, enemies: &[Enemy], sprite: &Sprite) {
