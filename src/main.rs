@@ -27,6 +27,7 @@ pub mod stars;
 pub mod waves;
 pub mod leaderboard;
 pub mod audio;
+pub mod assets;
 
 use app::App;
 use pixels::{Pixels, SurfaceTexture};

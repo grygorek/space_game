@@ -22,6 +22,7 @@ use crate::drawing::*;
 use crate::entities::{beam::Beam, enemy::Enemy, particle::Particle, ship::Ship, Collidable, Sprite};
 use crate::waves::{classic::ClassicWave, swoop::SwoopWave, Wave};
 
+use crate::assets::Assets;
 use crate::audio::AudioController;
 use crate::input::InputState;
 use crate::leaderboard::Leaderboard;
@@ -30,15 +31,6 @@ use crate::stars::{draw_star, generate_stars, update_stars, Star};
 use pixels::Pixels;
 use winit::dpi::PhysicalSize;
 use winit::event::VirtualKeyCode;
-
-// Asset Constants
-static SHIP_PNG: &[u8] = include_bytes!("../png/ship.png");
-static BEAM_PNG: &[u8] = include_bytes!("../png/beam.png");
-static ENEMY1_PNG: &[u8] = include_bytes!("../png/enemy1.png");
-static BOMB_PNG: &[u8] = include_bytes!("../png/bomb.png");
-static SFX_SHOT: &[u8] = include_bytes!("../sfx/laser1.wav");
-static SFX_EXPLOSION: &[u8] = include_bytes!("../sfx/explosion.wav");
-static SFX_OVERHEAT: &[u8] = include_bytes!("../sfx/Metal_Click.wav");
 
 #[derive(PartialEq)]
 pub enum GameState {
@@ -66,36 +58,18 @@ pub struct App {
     particles: Vec<Particle>,
     stars: Vec<Star>,
     rng: SimpleRng,
-    sprites: Vec<Sprite>,
 
+    assets: Assets,
     audio_controller: AudioController,
-
-    // We store the raw bytes of the sounds to "play" them instantly
-    sfx_shot: &'static [u8],
-    sfx_explosion: &'static [u8],
-    sfx_overheat: &'static [u8],
 }
 
 impl App {
     pub fn new(pixels: Pixels, size: PhysicalSize<u32>) -> Self {
         let mut rng = SimpleRng::seed_from_instant();
-
-        let image_data = [SHIP_PNG, BEAM_PNG, ENEMY1_PNG, BOMB_PNG];
-        let mut sprites = Vec::new();
-
-        for (i, data) in image_data.iter().enumerate() {
-            let img = image::load_from_memory(data).unwrap();
-            let (w, h, pix) = if i == 3 {
-                let res = img.resize(img.width() / 20, img.height() / 20, image::imageops::FilterType::Nearest);
-                (res.width(), res.height(), res.to_rgba8().into_raw())
-            } else {
-                (img.width(), img.height(), img.to_rgba8().into_raw())
-            };
-            sprites.push(Sprite { width: w, height: h, pixels: pix });
-        }
+        let assets = Assets::load();
 
         let ship = Ship {
-            x: (size.width / 2 - sprites[0].width / 2) as f32,
+            x: (size.width / 2 - assets.ship().width / 2) as f32,
             y: (size.height - size.height / 5) as f32,
             speed: 600.0,
             sprite_idx: 0,
@@ -117,14 +91,11 @@ impl App {
             enemies: Vec::new(),
             current_wave: Box::new(ClassicWave::new(1)),
             wave_count: 1,
-            sprites,
             beams: Vec::new(),
             particles: Vec::new(),
             stars: generate_stars(&mut rng, size),
-            sfx_shot: SFX_SHOT,
-            sfx_explosion: SFX_EXPLOSION,
-            sfx_overheat: SFX_OVERHEAT,
             audio_controller: AudioController::new(),
+            assets,
         }
     }
 
@@ -156,7 +127,7 @@ impl App {
 
         match self.state {
             GameState::StartScreen => {
-                Self::draw_start_menu(frame, w, h, &self.ship, &self.sprites);
+                Self::draw_start_menu(frame, w, h, &self.ship, &self.assets.sprites);
             }
             GameState::Playing => {
                 Self::draw_gameplay_layers(
@@ -167,7 +138,7 @@ impl App {
                     &self.beams,
                     &self.particles,
                     &self.ship,
-                    &self.sprites,
+                    &self.assets.sprites,
                     &*self.current_wave,
                     self.score,
                 );
@@ -181,7 +152,7 @@ impl App {
                     &self.beams,
                     &self.particles,
                     &self.ship,
-                    &self.sprites,
+                    &self.assets.sprites,
                     &*self.current_wave,
                     self.score,
                 );
@@ -196,7 +167,7 @@ impl App {
                     &self.beams,
                     &self.particles,
                     &self.ship,
-                    &self.sprites,
+                    &self.assets.sprites,
                     &*self.current_wave,
                     self.score,
                 );
@@ -287,14 +258,14 @@ impl App {
         if !self.ship.active {
             return;
         }
-        let s_img = &self.sprites[self.ship.sprite_idx];
+        let s_img = &self.assets.ship();
         self.ship.update(&self.input, self.size, s_img.width, s_img.height, dt);
 
         if self.input.was_key_pressed(VirtualKeyCode::Space) {
             if self.ship.try_fire() {
                 self.fire_beam();
             } else {
-                self.audio_controller.play_sfx(self.sfx_overheat);
+                self.audio_controller.play_sfx(self.assets.sfx_overheat);
             }
         }
     }
@@ -386,20 +357,20 @@ impl App {
             dt,
             self.size.width,
             self.size.height,
-            &self.sprites[2],
+            &self.assets.enemy(),
             self.ship.x,
         );
     }
 
     fn process_collisions(&mut self) {
-        let (s_w, s_h) = (self.sprites[0].width, self.sprites[0].height);
-        let (e_w, e_h) = (self.sprites[2].width, self.sprites[2].height);
+        let (s_w, s_h) = (self.assets.ship().width, self.assets.ship().height);
+        let (e_w, e_h) = (self.assets.enemy().width, self.assets.enemy().height);
         let mut play_explosion = false;
         let mut beam_explosions = Vec::new();
 
         for beam in self.beams.iter_mut() {
             for enemy in self.enemies.iter_mut().filter(|e| e.active) {
-                if beam.collides_with(enemy, &self.sprites[1], &self.sprites[2]) {
+                if beam.collides_with(enemy, &self.assets.beam(), &self.assets.enemy()) {
                     enemy.active = false;
                     if self.state == GameState::Playing {
                         self.score += if enemy.is_diving { 5 } else { 1 };
@@ -414,11 +385,11 @@ impl App {
         }
 
         if self.ship.active {
-            if self.current_wave.check_player_collision(&self.ship, &self.sprites[3], &self.sprites[0]) {
+            if self.current_wave.check_player_collision(&self.ship, &self.assets.bomb(), &self.assets.ship()) {
                 self.destroy_ship(s_w, s_h);
             }
             for enemy in self.enemies.iter().filter(|e| e.active) {
-                if enemy.collides_with(&self.ship, &self.sprites[2], &self.sprites[0]) {
+                if enemy.collides_with(&self.ship, &self.assets.enemy(), &self.assets.ship()) {
                     self.destroy_ship(s_w, s_h);
                     break;
                 }
@@ -429,19 +400,19 @@ impl App {
             self.spawn_explosion(hx, hy);
         }
         if play_explosion {
-            self.audio_controller.play_sfx(self.sfx_explosion);
+            self.audio_controller.play_sfx(self.assets.sfx_explosion);
         }
     }
 
     fn destroy_ship(&mut self, s_w: u32, s_h: u32) {
         self.ship.active = false;
         self.spawn_explosion((self.ship.x + s_w as f32 / 2.0) as u32, (self.ship.y + s_h as f32 / 2.0) as u32);
-        self.audio_controller.play_sfx(self.sfx_explosion);
+        self.audio_controller.play_sfx(self.assets.sfx_explosion);
     }
 
     pub fn reset(&mut self) {
         self.ship.active = true;
-        self.ship.x = (self.size.width / 2 - self.sprites[0].width / 2) as f32;
+        self.ship.x = (self.size.width / 2 - self.assets.ship().width / 2) as f32;
         self.ship.y = (self.size.height - self.size.height / 5) as f32;
         self.ship.heat = 0.0;
         self.ship.is_overheated = false;
@@ -458,7 +429,7 @@ impl App {
     }
 
     fn update_beams(&mut self, dt: f32) {
-        let b_h = self.sprites[1].height;
+        let b_h = self.assets.beam().height;
         for beam in self.beams.iter_mut() {
             beam.y -= 1000.0 * dt;
         }
@@ -531,15 +502,15 @@ impl App {
     }
 
     fn fire_beam(&mut self) {
-        let s = &self.sprites[0];
-        let b = &self.sprites[1];
+        let s = &self.assets.ship();
+        let b = &self.assets.beam();
         self.beams.push(Beam {
             x: self.ship.x + s.width as f32 / 2.0 - b.width as f32 / 2.0,
             y: self.ship.y - b.height as f32,
             sprite_idx: 1,
         });
 
-        self.audio_controller.play_sfx(self.sfx_shot);
+        self.audio_controller.play_sfx(self.assets.sfx_shot);
     }
 
     fn spawn_explosion(&mut self, x: u32, y: u32) {
