@@ -32,12 +32,55 @@ pub struct Ship {
     // Gun overheat system
     pub heat: f32,           // 0.0 to 1.0 (0% to 100%)
     pub is_overheated: bool, // True if we hit 1.0 and are waiting to hit 0.5
+
+    pub invincible_timer: f32, // Seconds of invincibility remaining
 }
 
 impl Ship {
+    pub fn new(screen_width: u32, screen_height: u32, sprite_width: u32) -> Self {
+        Self {
+            x: (screen_width / 2 - sprite_width / 2) as f32,
+            y: (screen_height - screen_height / 5) as f32,
+            speed: 600.0,
+            sprite_idx: 0,
+            active: true,
+            heat: 0.0,
+            is_overheated: false,
+            invincible_timer: 2.0,
+        }
+    }
+
+    pub fn respawn(&mut self, screen_width: u32, screen_height: u32, sprite_width: u32) {
+        self.x = (screen_width / 2 - sprite_width / 2) as f32;
+        self.y = (screen_height - screen_height / 5) as f32;
+        self.active = true;
+        self.heat = 0.0;
+        self.is_overheated = false;
+        self.invincible_timer = 2.0;
+    }
+
+    pub fn is_invincible(&self) -> bool {
+        self.invincible_timer > 0.0
+    }
+
+    pub fn is_visible(&self) -> bool {
+        if !self.active {
+            return false;
+        }
+        if self.invincible_timer > 0.0 {
+            // Blink: visible for 0.2s, hidden for 0.2s
+            return (self.invincible_timer * 5.0) as u32 % 2 == 0;
+        }
+        true
+    }
+
     pub fn update(&mut self, input: &InputState, size: PhysicalSize<u32>, sprite_w: u32, _sprite_h: u32, dt: f32) {
         if !self.active {
             return;
+        }
+
+        if self.invincible_timer > 0.0 {
+            self.invincible_timer = (self.invincible_timer - dt).max(0.0);
         }
 
         let cooling_rate = 0.2;

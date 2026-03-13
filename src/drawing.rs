@@ -143,6 +143,58 @@ pub fn draw_sprite(
     }
 }
 
+pub fn draw_sprite_scaled(
+    frame: &mut [u8],
+    frame_width: u32,
+    frame_height: u32,
+    dest_x: i32,
+    dest_y: i32,
+    sprite_pixels: &[u8],
+    sprite_w: u32,
+    sprite_h: u32,
+    scale: f32,
+) {
+    let out_w = (sprite_w as f32 * scale) as u32;
+    let out_h = (sprite_h as f32 * scale) as u32;
+
+    for row in 0..out_h {
+        for col in 0..out_w {
+            let tx = dest_x + col as i32;
+            let ty = dest_y + row as i32;
+
+            if tx < 0 || tx >= frame_width as i32 || ty < 0 || ty >= frame_height as i32 {
+                continue;
+            }
+
+            let src_col = ((col as f32 / scale) as u32).min(sprite_w - 1);
+            let src_row = ((row as f32 / scale) as u32).min(sprite_h - 1);
+            let src_idx = ((src_row * sprite_w + src_col) * 4) as usize;
+            let src_alpha = sprite_pixels[src_idx + 3];
+
+            if src_alpha == 0 {
+                continue;
+            }
+
+            let dst_idx = ((ty * frame_width as i32 + tx) * 4) as usize;
+            if dst_idx + 4 > frame.len() {
+                continue;
+            }
+
+            if src_alpha == 255 {
+                frame[dst_idx..dst_idx + 4].copy_from_slice(&sprite_pixels[src_idx..src_idx + 4]);
+            } else {
+                for i in 0..3 {
+                    let src = sprite_pixels[src_idx + i] as u32;
+                    let dst = frame[dst_idx + i] as u32;
+                    let alpha = src_alpha as u32;
+                    frame[dst_idx + i] = ((src * alpha + dst * (255 - alpha)) >> 8) as u8;
+                }
+                frame[dst_idx + 3] = 255;
+            }
+        }
+    }
+}
+
 pub fn draw_text_centered(frame: &mut [u8], width: u32, height: u32, text: &str, scale: u32, color: [u8; 4]) {
     let char_w = 8 * scale;
     let spacing = scale;

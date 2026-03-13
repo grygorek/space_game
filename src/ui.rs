@@ -19,6 +19,7 @@
 // THE SOFTWARE.
 
 use crate::drawing::*;
+use crate::entities::Sprite;
 
 pub use crate::drawing::{
     COLOR_GRAY_DARK, COLOR_GRAY_LIGHT, COLOR_HEALTH_GREEN, COLOR_HEAT_ORANGE, COLOR_OVERHEAT_RED, COLOR_RED,
@@ -56,7 +57,7 @@ pub fn draw_game_over_overlay(frame: &mut [u8], w: u32, h: u32, scores: &[(Strin
 }
 
 /// Draws the HUD (Score and Heat Bar)
-pub fn draw_hud(frame: &mut [u8], width: u32, height: u32, heat: f32, is_overheated: bool, score: u32) {
+pub fn draw_hud(frame: &mut [u8], width: u32, height: u32, heat: f32, is_overheated: bool, score: u32, lives: u32, ship_sprite: &Sprite) {
     let bar_w = 300;
     let bar_h = 30;
     let x = (width as i32 - bar_w as i32) / 2;
@@ -83,4 +84,19 @@ pub fn draw_hud(frame: &mut [u8], width: u32, height: u32, heat: f32, is_overhea
     // 4. Labels
     draw_text(frame, width, height, (width / 2) - 35, (y + bar_h as i32 + 10) as u32, "HEAT", 2, COLOR_WHITE);
     draw_text(frame, width, height, 20, 20, &format!("SCORE: {}", score), 3, COLOR_WHITE);
+
+    // Draw lives as small ship icons
+    let icon_scale = (height as f32 / 600.0).clamp(0.3, 1.0) * 0.5;
+    let icon_w = (ship_sprite.width as f32 * icon_scale) as i32;
+    let icon_y = 60_i32;
+    let icon_spacing = icon_w + 4;
+    for i in 0..lives {
+        let icon_x = 20 + i as i32 * icon_spacing;
+        draw_sprite_scaled(
+            frame, width, height,
+            icon_x, icon_y,
+            &ship_sprite.pixels, ship_sprite.width, ship_sprite.height,
+            icon_scale,
+        );
+    }
 }

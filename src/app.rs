@@ -51,6 +51,7 @@ pub struct App {
     leaderboard: Leaderboard,
 
     // Entities
+    lives: u32,
     ship: Ship,
     enemies: Vec<Enemy>,
     current_wave: Box<dyn Wave>,
@@ -69,15 +70,7 @@ impl App {
         let mut rng = SimpleRng::seed_from_instant();
         let assets = Assets::load();
 
-        let ship = Ship {
-            x: (size.width / 2 - assets.ship().width / 2) as f32,
-            y: (size.height - size.height / 5) as f32,
-            speed: 600.0,
-            sprite_idx: 0,
-            active: true,
-            heat: 0.0,
-            is_overheated: false,
-        };
+        let ship = Ship::new(size.width, size.height, assets.ship().width);
 
         Self {
             pixels,
@@ -88,6 +81,7 @@ impl App {
             state: GameState::StartScreen,
             name_input: String::new(),
             leaderboard: Leaderboard::new(),
+            lives: 3,
             ship,
             enemies: Vec::new(),
             current_wave: Box::new(ClassicWave::new(1)),
@@ -140,7 +134,7 @@ impl App {
                 &self.assets.sprites,
                 &*self.current_wave,
             );
-            ui::draw_hud(frame, w, h, self.ship.heat, self.ship.is_overheated, self.score);
+            ui::draw_hud(frame, w, h, self.ship.heat, self.ship.is_overheated, self.score, self.lives, &self.assets.ship());
         }
 
         // 3. State-specific Overlays
@@ -179,7 +173,7 @@ impl App {
             self.transition_wave();
         }
 
-        if !self.ship.active {
+        if self.lives == 0 && !self.ship.active {
             let min_high = self.leaderboard.entries.last().map(|(_, s)| *s).unwrap_or(0);
             if self.score > min_high || self.leaderboard.entries.len() < 5 {
                 self.name_input.clear();
@@ -258,7 +252,7 @@ impl App {
         Self::draw_beams(frame, w, h, beams, &sprites[1]);
         Self::draw_particles(frame, w, h, particles);
 
-        if ship.active {
+        if ship.is_visible() {
             let s = &sprites[ship.sprite_idx];
             draw_sprite(frame, w, h, ship.x as i32, ship.y as i32, &s.pixels, s.width, s.height);
         }
@@ -316,7 +310,7 @@ impl App {
             }
         }
 
-        if self.ship.active {
+        if self.ship.active && !self.ship.is_invincible() {
             if self.current_wave.check_player_collision(&self.ship, &self.assets.bomb(), &self.assets.ship()) {
                 self.destroy_ship(s_w, s_h);
             }
@@ -337,17 +331,20 @@ impl App {
     }
 
     fn destroy_ship(&mut self, s_w: u32, s_h: u32) {
-        self.ship.active = false;
         self.spawn_explosion((self.ship.x + s_w as f32 / 2.0) as u32, (self.ship.y + s_h as f32 / 2.0) as u32);
         self.audio_controller.play_sfx(self.assets.sfx_explosion);
+
+        self.lives = self.lives.saturating_sub(1);
+        if self.lives == 0 {
+            self.ship.active = false;
+        } else {
+            self.ship.respawn(self.size.width, self.size.height, s_w);
+        }
     }
 
     pub fn reset(&mut self) {
-        self.ship.active = true;
-        self.ship.x = (self.size.width / 2 - self.assets.ship().width / 2) as f32;
-        self.ship.y = (self.size.height - self.size.height / 5) as f32;
-        self.ship.heat = 0.0;
-        self.ship.is_overheated = false;
+        self.lives = 3;
+        self.ship.respawn(self.size.width, self.size.height, self.assets.ship().width);
 
         self.wave_count = 1;
         self.current_wave = Box::new(ClassicWave::new(1));
